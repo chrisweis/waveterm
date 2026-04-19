@@ -431,7 +431,9 @@ function TableBody({
 
     const allRows = table.getRowModel().flatRows;
     const dotdotRow = allRows.find((row) => row.getValue("name") === "..");
-    const otherRows = allRows.filter((row) => row.getValue("name") !== "..");
+    const dirRows = allRows.filter((row) => row.getValue("name") !== ".." && row.original.isdir);
+    const fileRows = allRows.filter((row) => !row.original.isdir);
+    const otherRows = [...dirRows, ...fileRows];
 
     return (
         <div className="dir-table-body" ref={bodyRef}>
