@@ -95,23 +95,48 @@
             width: 100%;
             padding: 5px 8px;
             border-radius: 4px;
+            .label {
+                flex: 1 1 auto;
+                min-width: 0;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
             .icons {
                 display: flex;
                 flex-direction: row;
                 gap: 5px;
+                margin-left: auto;
+                flex-shrink: 0;
+
+                .wave-iconbutton {
+                    width: 16px;
+                    justify-content: center;
+                }
             }
 
-            .wave-iconbutton.edit {
+            .wave-iconbutton.edit,
+            .wave-iconbutton.pin {
                 visibility: hidden;
+            }
+
+            .wave-iconbutton.pin.pinned {
+                visibility: visible;
             }
 
             .wave-iconbutton.window {
                 cursor: default;
                 opacity: 1 !important;
             }
+
+            .wave-iconbutton.window.hidden {
+                visibility: hidden;
+            }
         }
 
-        &:hover .wave-iconbutton.edit {
+        &:hover .wave-iconbutton.edit,
+        &:hover .wave-iconbutton.pin {
             visibility: visible;
         }
 

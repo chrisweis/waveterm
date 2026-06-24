@@ -201,10 +201,22 @@ const WorkspaceSwitcherItem = ({
     };
     const windowIconDecl: IconButtonDecl = {
         elemtype: "iconbutton",
-        className: "window",
+        className: clsx("window", { hidden: !isActive }),
         noAction: true,
         icon: isCurrentWorkspace ? "check" : "window",
         title: isCurrentWorkspace ? "This is your current workspace" : "This workspace is open",
+    };
+
+    const isPinned = !!workspace.pinned;
+    const pinIconDecl: IconButtonDecl = {
+        elemtype: "iconbutton",
+        className: clsx("pin", { pinned: isPinned }),
+        icon: isPinned ? "solid@thumbtack" : "regular@thumbtack",
+        title: isPinned ? "Unpin workspace" : "Pin workspace",
+        click: (e) => {
+            e.stopPropagation();
+            fireAndForget(() => env.services.workspace.SetWorkspacePinned(workspace.oid, !isPinned));
+        },
     };
 
     const isEditing = editingWorkspace === workspace.oid;
@@ -240,7 +252,8 @@ const WorkspaceSwitcherItem = ({
                     <ExpandableMenuItemRightElement>
                         <div className="icons">
                             <IconButton decl={editIconDecl} />
-                            {isActive && <IconButton decl={windowIconDecl} />}
+                            <IconButton decl={windowIconDecl} />
+                            <IconButton decl={pinIconDecl} />
                         </div>
                     </ExpandableMenuItemRightElement>
                 </div>

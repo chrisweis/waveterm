@@ -9,6 +9,7 @@ This is a personal fork of [wavetermdev/waveterm](https://github.com/wavetermdev
 ## What's customized
 
 - **Folders-first directory preview** — `frontend/app/view/preview/preview-directory.tsx` sorts directories above files in the directory preview pane (the `..` parent row stays pinned at the top).
+- **Pinned workspaces** — workspaces can be pinned so they sort to the top of the workspace switcher. A thumbtack toggle appears on each row (always visible when pinned, hover-only otherwise). Pin state is a `Pinned` bool on the `Workspace` Go struct; `wcore.ListWorkspaces` stable-sorts pinned-first; the `workspace.SetWorkspacePinned` service RPC persists it. Touches `pkg/waveobj/wtype.go`, `pkg/wcore/workspace.go`, `pkg/service/workspaceservice/workspaceservice.go`, `frontend/app/tab/workspaceswitcher.{tsx,scss}`, plus regenerated `frontend/types/gotypes.d.ts` and `frontend/app/store/services.ts` (via `task generate`).
 
 That's it. If you add more, document them here.
 

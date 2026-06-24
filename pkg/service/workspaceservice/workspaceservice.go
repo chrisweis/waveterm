@@ -66,6 +66,24 @@ func (svc *WorkspaceService) UpdateWorkspace(ctx context.Context, workspaceId st
 	return updates, nil
 }
 
+func (svc *WorkspaceService) SetWorkspacePinned_Meta() tsgenmeta.MethodMeta {
+	return tsgenmeta.MethodMeta{
+		ArgNames: []string{"workspaceId", "pinned"},
+	}
+}
+
+func (svc *WorkspaceService) SetWorkspacePinned(workspaceId string, pinned bool) error {
+	ctx, cancelFn := context.WithTimeout(context.Background(), DefaultTimeout)
+	defer cancelFn()
+	if err := wcore.SetPinned(ctx, workspaceId, pinned); err != nil {
+		return fmt.Errorf("error setting workspace pinned: %w", err)
+	}
+	wps.Broker.Publish(wps.WaveEvent{
+		Event: wps.Event_WorkspaceUpdate,
+	})
+	return nil
+}
+
 func (svc *WorkspaceService) GetWorkspace_Meta() tsgenmeta.MethodMeta {
 	return tsgenmeta.MethodMeta{
 		ArgNames:   []string{"workspaceId"},

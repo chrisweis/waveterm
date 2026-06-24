@@ -179,6 +179,7 @@ type Workspace struct {
 	Color       string      `json:"color,omitempty"`
 	TabIds      []string    `json:"tabids"`
 	ActiveTabId string      `json:"activetabid"`
+	Pinned      bool        `json:"pinned,omitempty"`
 	Meta        MetaMapType `json:"meta"`
 }
 
