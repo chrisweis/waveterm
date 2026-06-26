@@ -55,14 +55,31 @@ jobs:
                   max_attempts: 3
                   timeout_minutes: 5
 
+            # NOTE: we deliberately do NOT use `task package`. Its deps run in parallel and
+            # `clean` (rm -rf dist) can race with / clobber `build:backend`'s output, producing
+            # an installer with no wavesrv binary. The app then launches but never shows a window
+            # (wavesrv ENOENT). Build sequentially instead, and fail loudly if wavesrv is missing.
             - name: Build (Darwin)
               if: matrix.platform == 'darwin'
-              run: task package
+              run: |
+                  set -e
+                  task build:backend
+                  test -f dist/bin/wavesrv.arm64 && test -f dist/bin/wavesrv.x64
+                  task build:tsunamiscaffold
+                  npm run build:prod
+                  test -f dist/bin/wavesrv.arm64 && test -f dist/bin/wavesrv.x64
+                  npm exec electron-builder -- -c electron-builder.config.cjs -p never
 
             - name: Build (Windows)
               if: matrix.platform == 'windows'
-              run: task package
               shell: powershell
+              run: |
+                  task build:backend
+                  if (-not (Test-Path dist/bin/wavesrv.x64.exe)) { throw "wavesrv missing after build:backend" }
+                  task build:tsunamiscaffold
+                  npm run build:prod
+                  if (-not (Test-Path dist/bin/wavesrv.x64.exe)) { throw "wavesrv clobbered by build:prod" }
+                  npm exec electron-builder -- -c electron-builder.config.cjs -p never
 
             - name: Upload installers
               uses: actions/upload-artifact@v5
