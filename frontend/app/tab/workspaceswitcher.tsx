@@ -15,7 +15,7 @@ import { fireAndForget, makeIconClass, useAtomValueSafe } from "@/util/util";
 import clsx from "clsx";
 import { atom, PrimitiveAtom, useAtom, useAtomValue, useSetAtom } from "jotai";
 import { splitAtom } from "jotai/utils";
-import { OverlayScrollbarsComponent } from "overlayscrollbars-react";
+import { OverlayScrollbarsComponent, OverlayScrollbarsComponentRef } from "overlayscrollbars-react";
 import { CSSProperties, forwardRef, useCallback, useEffect } from "react";
 import WorkspaceSVG from "../asset/workspace.svg";
 import { IconButton } from "../element/iconbutton";
@@ -55,6 +55,20 @@ const WorkspaceSwitcher = forwardRef<HTMLDivElement>((_, ref) => {
     const activeWorkspace = useAtomValueSafe(env.atoms.workspace);
     const workspaceList = useAtomValue(workspaceSplitAtom);
     const setEditingWorkspace = useSetAtom(editingWorkspaceAtom);
+
+    // The popover content (and this scroll container) mounts fresh on each open. Reset the
+    // viewport to the top so the pinned workspaces at the top of the list are shown first.
+    const scrollableRef = useCallback((instance: OverlayScrollbarsComponentRef) => {
+        if (!instance) {
+            return;
+        }
+        requestAnimationFrame(() => {
+            const viewport = instance.osInstance()?.elements().viewport;
+            if (viewport) {
+                viewport.scrollTop = 0;
+            }
+        });
+    }, []);
 
     const updateWorkspaceList = useCallback(async () => {
         const workspaceList = await env.services.workspace.ListWorkspaces();
@@ -124,7 +138,11 @@ const WorkspaceSwitcher = forwardRef<HTMLDivElement>((_, ref) => {
             </PopoverButton>
             <PopoverContent className="workspace-switcher-content">
                 <div className="title">{isActiveWorkspaceSaved ? "Switch workspace" : "Open workspace"}</div>
-                <OverlayScrollbarsComponent className={"scrollable"} options={{ scrollbars: { autoHide: "leave" } }}>
+                <OverlayScrollbarsComponent
+                    ref={scrollableRef}
+                    className={"scrollable"}
+                    options={{ scrollbars: { autoHide: "leave" } }}
+                >
                     <ExpandableMenu noIndent singleOpen>
                         {workspaceList.map((entry, i) => (
                             <WorkspaceSwitcherItem key={i} entryAtom={entry} onDeleteWorkspace={onDeleteWorkspace} />
