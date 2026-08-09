@@ -1,4 +1,4 @@
-import { fireAndForget, makeIconClass } from "@/util/util";
+import { fireAndForget, isBlank, makeIconClass } from "@/util/util";
 import clsx from "clsx";
 import { memo, useEffect, useRef, useState } from "react";
 import { Button } from "../element/button";
@@ -60,24 +60,67 @@ const IconSelector = memo(({ icons, selectedIcon, onSelect, className }: IconSel
     );
 });
 
+// Emoji are frequently multi-codepoint (ZWJ sequences, skin-tone modifiers), so trim by grapheme
+// rather than by character -- slicing a family emoji by code unit yields garbage.
+function firstGrapheme(str: string): string {
+    if (isBlank(str)) {
+        return "";
+    }
+    const seg = new (Intl as any).Segmenter(undefined, { granularity: "grapheme" });
+    const first = Array.from(seg.segment(str))[0] as { segment: string };
+    return first?.segment ?? "";
+}
+
+interface EmojiSelectorProps {
+    emoji: string;
+    onSelect: (emoji: string) => void;
+}
+
+const EmojiSelector = memo(({ emoji, onSelect }: EmojiSelectorProps) => {
+    return (
+        <div className="emoji-selector">
+            <Input
+                className="emoji-input"
+                value={emoji ?? ""}
+                placeholder="🙂"
+                onChange={(val) => onSelect(firstGrapheme(val))}
+            />
+            <div className="emoji-hint">
+                {isBlank(emoji) ? (
+                    <span>Paste an emoji, or press Win + . / Ctrl + Cmd + Space</span>
+                ) : (
+                    <Button className="ghost text-[12px]" onClick={() => onSelect("")}>
+                        Use icon instead
+                    </Button>
+                )}
+            </div>
+        </div>
+    );
+});
+EmojiSelector.displayName = "EmojiSelector";
+
 interface WorkspaceEditorProps {
     title: string;
     icon: string;
     color: string;
+    emoji: string;
     focusInput: boolean;
     onTitleChange: (newTitle: string) => void;
     onColorChange: (newColor: string) => void;
     onIconChange: (newIcon: string) => void;
+    onEmojiChange: (newEmoji: string) => void;
     onDeleteWorkspace: () => void;
 }
 const WorkspaceEditorComponent = ({
     title,
     icon,
     color,
+    emoji,
     focusInput,
     onTitleChange,
     onColorChange,
     onIconChange,
+    onEmojiChange,
     onDeleteWorkspace,
 }: WorkspaceEditorProps) => {
     const inputRef = useRef<HTMLInputElement>(null);
@@ -112,7 +155,8 @@ const WorkspaceEditorComponent = ({
                 autoSelect
             />
             <ColorSelector selectedColor={color} colors={colors} onSelect={onColorChange} />
-            <IconSelector selectedIcon={icon} icons={icons} onSelect={onIconChange} />
+            <IconSelector selectedIcon={isBlank(emoji) ? icon : null} icons={icons} onSelect={onIconChange} />
+            <EmojiSelector emoji={emoji} onSelect={onEmojiChange} />
             <div className="delete-ws-btn-wrapper">
                 <Button className="ghost red text-[12px] bold" onClick={onDeleteWorkspace}>
                     Delete workspace

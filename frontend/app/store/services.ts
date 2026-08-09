@@ -205,6 +205,9 @@ export class WorkspaceServiceType {
     SetActiveTab(workspaceId: string, tabId: string): Promise<void> {
         return callBackendService(this?.waveEnv, "workspace", "SetActiveTab", Array.from(arguments))
     }
+    SetWorkspaceEmoji(workspaceId: string, emoji: string): Promise<void> {
+        return callBackendService(this?.waveEnv, "workspace", "SetWorkspaceEmoji", Array.from(arguments))
+    }
     SetWorkspacePinned(workspaceId: string, pinned: boolean): Promise<void> {
         return callBackendService(this?.waveEnv, "workspace", "SetWorkspacePinned", Array.from(arguments))
     }

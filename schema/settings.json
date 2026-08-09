@@ -50,6 +50,9 @@
             "left"
           ]
         },
+        "app:workspacerail": {
+          "type": "boolean"
+        },
         "feature:waveappbuilder": {
           "type": "boolean"
         },

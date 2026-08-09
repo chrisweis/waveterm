@@ -5,9 +5,12 @@ import { AIPanel } from "@/app/aipanel/aipanel";
 import { ErrorBoundary } from "@/app/element/errorboundary";
 import { CenteredDiv } from "@/app/element/quickelems";
 import { ModalsRenderer } from "@/app/modals/modalsrenderer";
+import { isBuilderWindow } from "@/app/store/windowtype";
 import { TabBar } from "@/app/tab/tabbar";
 import { TabContent } from "@/app/tab/tabcontent";
 import { VTabBar } from "@/app/tab/vtabbar";
+import { WorkspaceRail } from "@/app/tab/workspacerail";
+import { WorkspaceRailModel } from "@/app/tab/workspacerail-model";
 import { Widgets } from "@/app/workspace/widgets";
 import { WorkspaceLayoutModel } from "@/app/workspace/workspace-layout-model";
 import { atoms, getApi, getSettingsKeyAtom } from "@/store/global";
@@ -45,6 +48,9 @@ const WorkspaceElem = memo(() => {
     const ws = useAtomValue(atoms.workspace);
     const tabBarPosition = useAtomValue(getSettingsKeyAtom("app:tabbar")) ?? "top";
     const showLeftTabBar = tabBarPosition === "left";
+    const railEnabled = useAtomValue(getSettingsKeyAtom("app:workspacerail")) ?? false;
+    const railWidth = useAtomValue(WorkspaceRailModel.getInstance().widthAtom);
+    const showWorkspaceRail = railEnabled && !isBuilderWindow();
     const aiPanelVisible = useAtomValue(workspaceLayoutModel.panelVisibleAtom);
     const widgetsSidebarVisible = useAtomValue(workspaceLayoutModel.widgetsSidebarVisibleAtom);
     const windowWidth = window.innerWidth;
@@ -58,6 +64,12 @@ const WorkspaceElem = memo(() => {
     const panelContainerRef = useRef<HTMLDivElement>(null);
     const aiPanelWrapperRef = useRef<HTMLDivElement>(null);
     const vtabPanelWrapperRef = useRef<HTMLDivElement>(null);
+
+    // Must run before the registerRefs effect below so the first commitLayouts already knows how
+    // much width the rail is taking away from the panel group.
+    useEffect(() => {
+        workspaceLayoutModel.setRailWidth(showWorkspaceRail ? railWidth : 0);
+    }, [showWorkspaceRail, railWidth]);
 
     // showLeftTabBar is passed as a seed value only; subsequent changes are handled by setShowLeftTabBar below.
     // Do NOT add showLeftTabBar as a dep here — re-registering refs on config changes would redundantly re-run commitLayouts.
@@ -112,6 +124,13 @@ const WorkspaceElem = memo(() => {
             {!(showLeftTabBar && isMacOS()) && <TabBar key={ws.oid} workspace={ws} noTabs={showLeftTabBar} />}
             {showLeftTabBar && isMacOS() && <MacOSTabBarSpacer />}
             <div ref={panelContainerRef} className="flex flex-row flex-grow overflow-hidden">
+                {showWorkspaceRail && (
+                    <div className="h-full shrink-0" style={{ width: railWidth }}>
+                        <ErrorBoundary>
+                            <WorkspaceRail />
+                        </ErrorBoundary>
+                    </div>
+                )}
                 <ErrorBoundary key={tabId}>
                     <PanelGroup
                         direction="horizontal"

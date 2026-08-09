@@ -84,6 +84,24 @@ func (svc *WorkspaceService) SetWorkspacePinned(workspaceId string, pinned bool)
 	return nil
 }
 
+func (svc *WorkspaceService) SetWorkspaceEmoji_Meta() tsgenmeta.MethodMeta {
+	return tsgenmeta.MethodMeta{
+		ArgNames: []string{"workspaceId", "emoji"},
+	}
+}
+
+func (svc *WorkspaceService) SetWorkspaceEmoji(workspaceId string, emoji string) error {
+	ctx, cancelFn := context.WithTimeout(context.Background(), DefaultTimeout)
+	defer cancelFn()
+	if err := wcore.SetEmoji(ctx, workspaceId, emoji); err != nil {
+		return fmt.Errorf("error setting workspace emoji: %w", err)
+	}
+	wps.Broker.Publish(wps.WaveEvent{
+		Event: wps.Event_WorkspaceUpdate,
+	})
+	return nil
+}
+
 func (svc *WorkspaceService) GetWorkspace_Meta() tsgenmeta.MethodMeta {
 	return tsgenmeta.MethodMeta{
 		ArgNames:   []string{"workspaceId"},

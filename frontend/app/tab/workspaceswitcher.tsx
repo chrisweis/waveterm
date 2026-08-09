@@ -1,6 +1,7 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { globalStore } from "@/app/store/jotaiStore";
 import { useWaveEnv, WaveEnv, WaveEnvSubset } from "@/app/waveenv/waveenv";
 import {
     ExpandableMenu,
@@ -11,7 +12,7 @@ import {
     ExpandableMenuItemRightElement,
 } from "@/element/expandablemenu";
 import { Popover, PopoverButton, PopoverContent } from "@/element/popover";
-import { fireAndForget, makeIconClass, useAtomValueSafe } from "@/util/util";
+import { fireAndForget, useAtomValueSafe } from "@/util/util";
 import clsx from "clsx";
 import { atom, PrimitiveAtom, useAtom, useAtomValue, useSetAtom } from "jotai";
 import { splitAtom } from "jotai/utils";
@@ -19,10 +20,10 @@ import { OverlayScrollbarsComponent, OverlayScrollbarsComponentRef } from "overl
 import { CSSProperties, forwardRef, useCallback, useEffect } from "react";
 import WorkspaceSVG from "../asset/workspace.svg";
 import { IconButton } from "../element/iconbutton";
-import { globalStore } from "@/app/store/jotaiStore";
 import { makeORef } from "../store/wos";
 import { waveEventSubscribeSingle } from "../store/wps";
 import { WorkspaceEditor } from "./workspaceeditor";
+import { WorkspaceIcon } from "./workspaceicon";
 import "./workspaceswitcher.scss";
 
 export type WorkspaceSwitcherEnv = WaveEnvSubset<{
@@ -107,7 +108,12 @@ const WorkspaceSwitcher = forwardRef<HTMLDivElement>((_, ref) => {
     const isActiveWorkspaceSaved = !!(activeWorkspace.name && activeWorkspace.icon);
 
     const workspaceIcon = isActiveWorkspaceSaved ? (
-        <i className={makeIconClass(activeWorkspace.icon, false)} style={{ color: activeWorkspace.color }}></i>
+        <WorkspaceIcon
+            icon={activeWorkspace.icon}
+            color={activeWorkspace.color}
+            emoji={activeWorkspace.emoji}
+            fw={false}
+        />
     ) : (
         <WorkspaceSVG />
     );
@@ -202,6 +208,11 @@ const WorkspaceSwitcherItem = ({
         }
     }, []);
 
+    const setEmoji = useCallback((emoji: string) => {
+        setWorkspaceEntry({ ...workspaceEntry, workspace: { ...workspace, emoji } });
+        fireAndForget(() => env.services.workspace.SetWorkspaceEmoji(workspace.oid, emoji));
+    }, []);
+
     const isActive = !!workspaceEntry.windowId;
     const editIconDecl: IconButtonDecl = {
         elemtype: "iconbutton",
@@ -261,9 +272,11 @@ const WorkspaceSwitcherItem = ({
                     }
                 >
                     <ExpandableMenuItemLeftElement>
-                        <i
-                            className={clsx("left-icon", makeIconClass(workspace.icon, true))}
-                            style={{ color: workspace.color }}
+                        <WorkspaceIcon
+                            className="left-icon"
+                            icon={workspace.icon}
+                            color={workspace.color}
+                            emoji={workspace.emoji}
                         />
                     </ExpandableMenuItemLeftElement>
                     <div className="label">{workspace.name}</div>
@@ -281,10 +294,12 @@ const WorkspaceSwitcherItem = ({
                     title={workspace.name}
                     icon={workspace.icon}
                     color={workspace.color}
+                    emoji={workspace.emoji}
                     focusInput={isEditing}
                     onTitleChange={(title) => setWorkspace({ ...workspace, name: title })}
                     onColorChange={(color) => setWorkspace({ ...workspace, color })}
                     onIconChange={(icon) => setWorkspace({ ...workspace, icon })}
+                    onEmojiChange={setEmoji}
                     onDeleteWorkspace={() => onDeleteWorkspace(workspace.oid)}
                 />
             </ExpandableMenuItem>

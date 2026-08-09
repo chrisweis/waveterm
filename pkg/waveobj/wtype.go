@@ -180,6 +180,7 @@ type Workspace struct {
 	TabIds      []string    `json:"tabids"`
 	ActiveTabId string      `json:"activetabid"`
 	Pinned      bool        `json:"pinned,omitempty"`
+	Emoji       string      `json:"emoji,omitempty"`
 	Meta        MetaMapType `json:"meta"`
 }
 

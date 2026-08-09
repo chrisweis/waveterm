@@ -52,6 +52,7 @@ class WorkspaceLayoutModel {
     private aiPanelWidth: number | null;
     private vtabWidth: number;
     private vtabVisible: boolean;
+    private railWidth: number;
     private transitionTimeoutRef: NodeJS.Timeout | null = null;
     private focusTimeoutRef: NodeJS.Timeout | null = null;
     private debouncedPersistAIWidth: () => void;
@@ -71,6 +72,7 @@ class WorkspaceLayoutModel {
         this.aiPanelWidth = null;
         this.vtabWidth = VTabBar_DefaultWidth;
         this.vtabVisible = false;
+        this.railWidth = 0;
         this.panelVisibleAtom = jotai.atom(false);
         this.widgetsSidebarVisibleAtom = jotai.atom(
             (get) =>
@@ -179,18 +181,25 @@ class WorkspaceLayoutModel {
         return clampVTabWidth(this.vtabWidth);
     }
 
+    // The workspace rail sits outside the panel group, so every px->% conversion has to be
+    // against the width the panel group actually gets, not the full window.
+    private availWidth(windowWidth: number): number {
+        return Math.max(1, windowWidth - this.railWidth);
+    }
+
     // ---- Core layout computation ----
     // All layout decisions flow through computeLayout.
     // It takes the current state (visibility flags + stored px widths)
     // and produces the two percentage arrays for the panel groups.
 
     private computeLayout(windowWidth: number): { outer: number[]; inner: number[] } {
+        const availW = this.availWidth(windowWidth);
         const vtabW = this.vtabVisible ? this.getResolvedVTabWidth() : 0;
-        const aiW = this.aiPanelVisible ? this.getResolvedAIWidth(windowWidth) : 0;
+        const aiW = this.aiPanelVisible ? this.getResolvedAIWidth(availW) : 0;
         const leftGroupW = vtabW + aiW;
 
         // outer: [leftGroupPct, contentPct]
-        const leftPct = windowWidth > 0 ? (leftGroupW / windowWidth) * 100 : 0;
+        const leftPct = availW > 0 ? (leftGroupW / availW) * 100 : 0;
         const contentPct = Math.max(0, 100 - leftPct);
 
         // inner: [vtabPct, aiPanelPct] relative to leftGroupW
@@ -224,18 +233,19 @@ class WorkspaceLayoutModel {
     handleOuterPanelLayout(sizes: number[]): void {
         if (this.inResize) return;
         const windowWidth = window.innerWidth;
-        const newLeftGroupPx = (sizes[0] / 100) * windowWidth;
+        const availW = this.availWidth(windowWidth);
+        const newLeftGroupPx = (sizes[0] / 100) * availW;
 
         if (this.vtabVisible && this.aiPanelVisible) {
             // vtab stays constant, aipanel absorbs the change
             const vtabW = this.getResolvedVTabWidth();
-            this.aiPanelWidth = clampAIPanelWidth(newLeftGroupPx - vtabW, windowWidth);
+            this.aiPanelWidth = clampAIPanelWidth(newLeftGroupPx - vtabW, availW);
             this.debouncedPersistAIWidth();
         } else if (this.vtabVisible) {
             this.vtabWidth = clampVTabWidth(newLeftGroupPx);
             this.debouncedPersistVTabWidth();
         } else if (this.aiPanelVisible) {
-            this.aiPanelWidth = clampAIPanelWidth(newLeftGroupPx, windowWidth);
+            this.aiPanelWidth = clampAIPanelWidth(newLeftGroupPx, availW);
             this.debouncedPersistAIWidth();
         }
 
@@ -247,13 +257,14 @@ class WorkspaceLayoutModel {
         if (!this.vtabVisible || !this.aiPanelVisible) return;
 
         const windowWidth = window.innerWidth;
+        const availW = this.availWidth(windowWidth);
         const vtabW = this.getResolvedVTabWidth();
-        const aiW = this.getResolvedAIWidth(windowWidth);
+        const aiW = this.getResolvedAIWidth(availW);
         const leftGroupW = vtabW + aiW;
 
         const newVTabW = (sizes[0] / 100) * leftGroupW;
         const clampedVTab = clampVTabWidth(newVTabW);
-        const newAIW = clampAIPanelWidth(leftGroupW - clampedVTab, windowWidth);
+        const newAIW = clampAIPanelWidth(leftGroupW - clampedVTab, availW);
 
         if (clampedVTab !== this.vtabWidth) {
             this.vtabWidth = clampedVTab;
@@ -344,7 +355,7 @@ class WorkspaceLayoutModel {
 
     updateWrapperWidth(): void {
         if (!this.aiPanelWrapperRef) return;
-        const width = this.getResolvedAIWidth(window.innerWidth);
+        const width = this.getResolvedAIWidth(this.availWidth(window.innerWidth));
         this.aiPanelWrapperRef.style.width = `${width}px`;
     }
 
@@ -355,32 +366,41 @@ class WorkspaceLayoutModel {
     }
 
     getAIPanelWidth(): number {
-        return this.getResolvedAIWidth(window.innerWidth);
+        return this.getResolvedAIWidth(this.availWidth(window.innerWidth));
     }
 
     // ---- Initial percentage helpers (used by workspace.tsx for defaultSize) ----
 
     getLeftGroupInitialPercentage(windowWidth: number, showLeftTabBar: boolean): number {
+        const availW = this.availWidth(windowWidth);
         const vtabW = showLeftTabBar && !isBuilderWindow() ? this.getResolvedVTabWidth() : 0;
-        const aiW = this.aiPanelVisible ? this.getResolvedAIWidth(windowWidth) : 0;
-        return ((vtabW + aiW) / windowWidth) * 100;
+        const aiW = this.aiPanelVisible ? this.getResolvedAIWidth(availW) : 0;
+        return ((vtabW + aiW) / availW) * 100;
     }
 
     getInnerVTabInitialPercentage(windowWidth: number, showLeftTabBar: boolean): number {
         if (!showLeftTabBar || isBuilderWindow()) return 0;
+        const availW = this.availWidth(windowWidth);
         const vtabW = this.getResolvedVTabWidth();
-        const aiW = this.aiPanelVisible ? this.getResolvedAIWidth(windowWidth) : 0;
+        const aiW = this.aiPanelVisible ? this.getResolvedAIWidth(availW) : 0;
         const total = vtabW + aiW;
         if (total === 0) return 50;
         return (vtabW / total) * 100;
     }
 
     getInnerAIPanelInitialPercentage(windowWidth: number, showLeftTabBar: boolean): number {
+        const availW = this.availWidth(windowWidth);
         const vtabW = showLeftTabBar && !isBuilderWindow() ? this.getResolvedVTabWidth() : 0;
-        const aiW = this.aiPanelVisible ? this.getResolvedAIWidth(windowWidth) : 0;
+        const aiW = this.aiPanelVisible ? this.getResolvedAIWidth(availW) : 0;
         const total = vtabW + aiW;
         if (total === 0) return 50;
         return (aiW / total) * 100;
+    }
+
+    setRailWidth(railWidth: number): void {
+        if (this.railWidth === railWidth) return;
+        this.railWidth = railWidth;
+        this.commitLayouts(window.innerWidth);
     }
 
     // ---- Toggle visibility ----

@@ -133,6 +133,7 @@ const TabBar = memo(({ workspace, noTabs }: TabBarProps) => {
     const showMenuBar = useAtomValue(env.getSettingsKeyAtom("window:showmenubar"));
     const confirmClose = useAtomValue(env.getSettingsKeyAtom("tab:confirmclose")) ?? false;
     const hideAiButton = useAtomValue(env.getSettingsKeyAtom("app:hideaibutton"));
+    const workspaceRailEnabled = useAtomValue(env.getSettingsKeyAtom("app:workspacerail")) ?? false;
     const appUpdateStatus = useAtomValue(env.atoms.updaterStatusAtom);
 
     let prevDelta: number;
@@ -614,15 +615,17 @@ const TabBar = memo(({ workspace, noTabs }: TabBarProps) => {
                 </div>
             )}
             <WaveAIButton divRef={waveAIButtonRef} />
-            <Tooltip
-                content="Workspace Switcher"
-                placement="bottom"
-                hideOnClick
-                divRef={workspaceSwitcherRef}
-                divClassName="flex items-center"
-            >
-                <WorkspaceSwitcher />
-            </Tooltip>
+            {!workspaceRailEnabled && (
+                <Tooltip
+                    content="Workspace Switcher"
+                    placement="bottom"
+                    hideOnClick
+                    divRef={workspaceSwitcherRef}
+                    divClassName="flex items-center"
+                >
+                    <WorkspaceSwitcher />
+                </Tooltip>
+            )}
             <div className="tab-bar" ref={tabBarRef} data-overlayscrollbars-initialize>
                 <div
                     className="tabs-wrapper"

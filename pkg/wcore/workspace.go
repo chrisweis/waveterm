@@ -476,3 +476,16 @@ func SetPinned(ctx context.Context, workspaceId string, pinned bool) error {
 	wstore.DBUpdate(ctx, ws)
 	return nil
 }
+
+func SetEmoji(ctx context.Context, workspaceId string, emoji string) error {
+	ws, e := wstore.DBGet[*waveobj.Workspace](ctx, workspaceId)
+	if e != nil {
+		return e
+	}
+	if ws == nil {
+		return fmt.Errorf("workspace not found: %q", workspaceId)
+	}
+	ws.Emoji = emoji
+	wstore.DBUpdate(ctx, ws)
+	return nil
+}

@@ -1,0 +1,11 @@
+.workspace-emoji {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+    // Emoji font metrics vary a lot between glyphs; a fixed square box mirrors what fa-fw does
+    // for the Font Awesome icons so rows don't shift when a workspace switches between the two.
+    width: 1.25em;
+    height: 1.25em;
+}
