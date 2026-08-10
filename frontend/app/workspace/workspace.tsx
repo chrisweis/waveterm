@@ -51,6 +51,11 @@ const WorkspaceElem = memo(() => {
     const sidebarEnabled = useAtomValue(getSettingsKeyAtom("app:workspacesidebar")) ?? false;
     const sidebarWidth = useAtomValue(WorkspaceSidebarModel.getInstance().widthAtom);
     const showWorkspaceSidebar = sidebarEnabled && !isBuilderWindow();
+    const isFullScreen = useAtomValue(atoms.isFullScreen);
+    // With app:tabbar=left on macOS there is no top TabBar, and VTabBar carries the traffic-light
+    // inset in its own header. The sidebar sits left of VTabBar, so without the same inset the
+    // traffic lights land on top of its first rows.
+    const sidebarNeedsMacInset = showWorkspaceSidebar && showLeftTabBar && isMacOS() && !isFullScreen;
     const aiPanelVisible = useAtomValue(workspaceLayoutModel.panelVisibleAtom);
     const widgetsSidebarVisible = useAtomValue(workspaceLayoutModel.widgetsSidebarVisibleAtom);
     const windowWidth = window.innerWidth;
@@ -129,9 +134,24 @@ const WorkspaceElem = memo(() => {
             {showLeftTabBar && isMacOS() && <MacOSTabBarSpacer />}
             <div ref={panelContainerRef} className="flex flex-row flex-grow overflow-hidden">
                 {showWorkspaceSidebar && (
-                    <div className="relative h-full shrink-0" style={{ width: sidebarWidth }}>
+                    <div className="relative flex h-full shrink-0 flex-col" style={{ width: sidebarWidth }}>
+                        {sidebarNeedsMacInset && (
+                            <div
+                                className="w-full shrink-0"
+                                style={
+                                    {
+                                        height: "calc(25px * var(--zoomfactor-inv))",
+                                        WebkitAppRegion: "drag",
+                                        backdropFilter: "blur(20px)",
+                                        background: "rgba(0, 0, 0, 0.35)",
+                                    } as React.CSSProperties
+                                }
+                            />
+                        )}
                         <ErrorBoundary>
-                            <WorkspaceSidebar />
+                            <div className="min-h-0 flex-1">
+                                <WorkspaceSidebar />
+                            </div>
                             <WorkspaceSidebarResizeHandle />
                         </ErrorBoundary>
                     </div>
