@@ -177,6 +177,52 @@ const SidebarButton = memo(({ icon, label, compact, onClick }: SidebarButtonProp
 });
 SidebarButton.displayName = "SidebarButton";
 
+// Rendered by workspace.tsx as a sibling of the sidebar, not inside it. The sidebar clips its own
+// overflow, and the handle has to straddle the boundary: whatever sits immediately right of the
+// sidebar (the panel group's own splitter) paints a resize cursor a few px past the edge, so a
+// handle confined to the inside loses every drag that approaches from the content side.
+export const WorkspaceSidebarResizeHandle = memo(() => {
+    const sidebarModel = WorkspaceSidebarModel.getInstance();
+    const compact = useAtomValue(sidebarModel.compactAtom);
+
+    // Listeners go on window rather than the handle: the pointer routinely outruns a thin strip
+    // during a fast drag, and losing the move events mid-gesture strands the sidebar half-resized.
+    const onResizePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const startX = e.clientX;
+        const startWidth = globalStore.get(sidebarModel.expandedWidthAtom);
+        const onMove = (ev: PointerEvent) => {
+            sidebarModel.setDragWidth(startWidth + (ev.clientX - startX));
+        };
+        const onUp = () => {
+            window.removeEventListener("pointermove", onMove);
+            window.removeEventListener("pointerup", onUp);
+            document.body.style.cursor = "";
+            document.body.style.userSelect = "";
+            sidebarModel.persistWidth();
+        };
+        document.body.style.cursor = "col-resize";
+        document.body.style.userSelect = "none";
+        window.addEventListener("pointermove", onMove);
+        window.addEventListener("pointerup", onUp);
+    }, []);
+
+    if (compact) {
+        return null;
+    }
+
+    return (
+        <div
+            className="group absolute top-0 bottom-0 -right-1 z-30 w-3 cursor-col-resize"
+            onPointerDown={onResizePointerDown}
+        >
+            <div className="absolute inset-y-0 right-1 w-0.5 bg-transparent transition-colors group-hover:bg-accent/70" />
+        </div>
+    );
+});
+WorkspaceSidebarResizeHandle.displayName = "WorkspaceSidebarResizeHandle";
+
 export const WorkspaceSidebar = memo(() => {
     const env = useWaveEnv<WorkspaceSidebarEnv>();
     const sidebarModel = WorkspaceSidebarModel.getInstance();
@@ -219,11 +265,11 @@ export const WorkspaceSidebar = memo(() => {
         env.electron.deleteWorkspace(workspaceId);
     }, []);
 
-    // No right border on the container below: a divider line there reads as a drag handle, and the
-    // sidebar is deliberately fixed-width. The darker background provides the separation instead.
+    // The right edge carries a real resize handle in expanded mode only. Compact mode is a fixed
+    // 48px icon strip, so it deliberately shows no edge affordance at all.
     return (
         <div
-            className="flex h-full flex-col overflow-hidden"
+            className="relative flex h-full flex-col overflow-hidden"
             style={{ backdropFilter: "blur(20px)", background: "rgba(0, 0, 0, 0.35)" }}
         >
             <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overflow-x-hidden pt-1.5">

@@ -9,7 +9,7 @@ import { isBuilderWindow } from "@/app/store/windowtype";
 import { TabBar } from "@/app/tab/tabbar";
 import { TabContent } from "@/app/tab/tabcontent";
 import { VTabBar } from "@/app/tab/vtabbar";
-import { WorkspaceSidebar } from "@/app/tab/workspacesidebar";
+import { WorkspaceSidebar, WorkspaceSidebarResizeHandle } from "@/app/tab/workspacesidebar";
 import { WorkspaceSidebarModel } from "@/app/tab/workspacesidebar-model";
 import { Widgets } from "@/app/workspace/widgets";
 import { WorkspaceLayoutModel } from "@/app/workspace/workspace-layout-model";
@@ -114,6 +114,10 @@ const WorkspaceElem = memo(() => {
         return () => window.removeEventListener("focus", handleFocus);
     }, []);
 
+    // These handles must be `disabled`, not merely styled to zero width. A hidden-but-enabled
+    // PanelResizeHandle still counts as live to react-resizable-panels, which applies its global
+    // ew-resize cursor to the whole PanelGroup -- every descendant inherits it, so the terminal and
+    // the workspace sidebar both show a resize cursor that resizes nothing.
     const innerHandleVisible = showLeftTabBar && aiPanelVisible;
     const innerHandleClass = `bg-transparent hover:bg-zinc-500/20 transition-colors ${innerHandleVisible ? "w-0.5" : "w-0 pointer-events-none"}`;
     const outerHandleVisible = showLeftTabBar || aiPanelVisible;
@@ -125,9 +129,10 @@ const WorkspaceElem = memo(() => {
             {showLeftTabBar && isMacOS() && <MacOSTabBarSpacer />}
             <div ref={panelContainerRef} className="flex flex-row flex-grow overflow-hidden">
                 {showWorkspaceSidebar && (
-                    <div className="h-full shrink-0" style={{ width: sidebarWidth }}>
+                    <div className="relative h-full shrink-0" style={{ width: sidebarWidth }}>
                         <ErrorBoundary>
                             <WorkspaceSidebar />
+                            <WorkspaceSidebarResizeHandle />
                         </ErrorBoundary>
                     </div>
                 )}
@@ -154,7 +159,7 @@ const WorkspaceElem = memo(() => {
                                         {showLeftTabBar && <VTabBar workspace={ws} />}
                                     </div>
                                 </Panel>
-                                <PanelResizeHandle className={innerHandleClass} />
+                                <PanelResizeHandle className={innerHandleClass} disabled={!innerHandleVisible} />
                                 <Panel
                                     ref={aiPanelRef}
                                     collapsible
@@ -171,7 +176,7 @@ const WorkspaceElem = memo(() => {
                                 </Panel>
                             </PanelGroup>
                         </Panel>
-                        <PanelResizeHandle className={outerHandleClass} />
+                        <PanelResizeHandle className={outerHandleClass} disabled={!outerHandleVisible} />
                         <Panel order={1} defaultSize={100 - leftGroupInitialPct}>
                             {tabId === "" ? (
                                 <CenteredDiv>No Active Tab</CenteredDiv>

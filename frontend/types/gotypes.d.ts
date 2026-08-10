@@ -1165,6 +1165,7 @@ declare global {
         "layout:vtabbarwidth"?: number;
         "layout:widgetsvisible"?: boolean;
         "layout:workspacesidebarcompact"?: boolean;
+        "layout:workspacesidebarwidth"?: number;
         "waveai:panelopen"?: boolean;
         "waveai:panelwidth"?: number;
         "waveai:model"?: string;
