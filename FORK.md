@@ -12,22 +12,22 @@ This is a personal fork of [wavetermdev/waveterm](https://github.com/wavetermdev
 - **Pinned workspaces** — workspaces can be pinned so they sort to the top of the workspace switcher. A thumbtack toggle appears on each row (always visible when pinned, hover-only otherwise). Pin state is a `Pinned` bool on the `Workspace` Go struct; `wcore.ListWorkspaces` stable-sorts pinned-first; the `workspace.SetWorkspacePinned` service RPC persists it. The switcher dropdown also resets its scroll to the top on each open (via a callback ref on the `OverlayScrollbarsComponent`) so the pinned items are shown first. Touches `pkg/waveobj/wtype.go`, `pkg/wcore/workspace.go`, `pkg/service/workspaceservice/workspaceservice.go`, `frontend/app/tab/workspaceswitcher.{tsx,scss}`, plus regenerated `frontend/types/gotypes.d.ts` and `frontend/app/store/services.ts` (via `task generate`).
 
 - **Workspace sidebar + emoji workspace icons** — an opt-in left pane that replaces the workspace-switcher button, plus the ability to use any emoji as a workspace icon. ("Sidebar" follows Wave's own naming for the widgets strip — `widgetsSidebarVisibleAtom`, `layout:widgetsvisible`.)
-    - **Turning it on:** `app:workspacesidebar: true` in settings (or `wsh setconfig app:workspacesidebar=true`). Defaults to false, which leaves the stock switcher button exactly as it was. When on, the button is hidden in both the top tab bar and the macOS vertical-tab-bar header.
-    - **Two modes:** compact (48px) shows just the icon/emoji; expanded (200px) shows icon + name. The chevron at the bottom of the sidebar toggles between them. Hovering any row shows the workspace name immediately (`openDelay={0}`), which is the only way to read names in compact mode.
-    - **Sidebar placement:** it is a fixed-width flex sibling *outside* the `PanelGroup`, as the first child of `panelContainerRef`. Deliberately not a `Panel` — the panel group's px↔% math is delicate and upstream touches it, so keeping the sidebar out of it minimizes conflict surface. The cost is that `WorkspaceLayoutModel` has to know the sidebar's width: `setSidebarWidth()` plus a private `availWidth()` that every px↔% conversion now divides by instead of `window.innerWidth`. If a rebase ever drops that, the AI panel and vertical tab bar will render slightly too wide.
-    - **Editing from the sidebar:** since the switcher button is hidden, each row carries its own hover controls — a pin toggle (expanded only) and a pencil that opens the existing `WorkspaceEditor` in a popover. Without these the sidebar would strand rename/recolor/delete with no way to reach them. The pencil's `PopoverButton` must keep its `ghost grey` classes: `Button` silently falls back to a solid green pill when the className carries no category/color class.
-    - **Emoji:** a new `Emoji` field on the `Workspace` Go struct, set via the `workspace.SetWorkspaceEmoji` service RPC. A non-blank emoji overrides the Font Awesome icon everywhere via the shared `WorkspaceIcon` component. Input is a one-glyph text field in the workspace editor (paste, or the OS picker — Win + `.` / Ctrl + Cmd + Space); it trims by *grapheme*, not by character, so multi-codepoint emoji (ZWJ sequences, skin tones) survive.
-    - **Sidebar mode persistence:** `layout:workspacesidebarcompact` on the **client** object, not the workspace — the sidebar must not change shape when you use it to switch workspaces.
-    - **Only saved workspaces appear.** `wcore.ListWorkspaces` filters out workspaces with no name/icon/color, so a fresh profile shows an empty sidebar with just the two footer buttons. That is expected, not a bug.
-    - Touches `pkg/waveobj/wtype.go`, `pkg/waveobj/wtypemeta.go`, `pkg/wcore/workspace.go`, `pkg/service/workspaceservice/workspaceservice.go`, `pkg/wconfig/settingsconfig.go`, `docs/docs/config.mdx`, new `frontend/app/tab/workspacesidebar.{tsx,scss}`, `workspacesidebar-model.ts`, `workspacesidebarenv.ts`, `workspaceicon.{tsx,scss}`, plus edits to `workspaceswitcher.tsx`, `workspaceeditor.{tsx,scss}`, `tabbar.tsx`, `tabbarenv.ts`, `vtabbar.tsx`, `vtabbarenv.ts`, `workspace.tsx`, `workspace-layout-model.ts`, and regenerated `gotypes.d.ts` / `services.ts` / `metaconsts.go` / `schema/settings.json` (via `task generate`).
+  - **Turning it on:** **View → Workspace Sidebar** (a checkbox item, added in `emain/emain-menu.ts`), or `app:workspacesidebar: true` in settings / `wsh setconfig app:workspacesidebar=true`. Defaults to false, which leaves the stock switcher button exactly as it was. When on, the button is hidden in both the top tab bar and the macOS vertical-tab-bar header. The config watcher applies the change live — no restart.
+  - **Two modes:** compact (48px) shows just the icon/emoji; expanded (200px) shows icon + name. The chevron at the bottom of the sidebar toggles between them. Hovering any row shows the workspace name immediately (`openDelay={0}`), which is the only way to read names in compact mode.
+  - **Sidebar placement:** it is a fixed-width flex sibling _outside_ the `PanelGroup`, as the first child of `panelContainerRef`. Deliberately not a `Panel` — the panel group's px↔% math is delicate and upstream touches it, so keeping the sidebar out of it minimizes conflict surface. The cost is that `WorkspaceLayoutModel` has to know the sidebar's width: `setSidebarWidth()` plus a private `availWidth()` that every px↔% conversion now divides by instead of `window.innerWidth`. If a rebase ever drops that, the AI panel and vertical tab bar will render slightly too wide.
+  - **Editing from the sidebar:** since the switcher button is hidden, each row carries its own hover controls — a pin toggle (expanded only) and a pencil that opens the existing `WorkspaceEditor` in a popover. Without these the sidebar would strand rename/recolor/delete with no way to reach them. The pencil's `PopoverButton` must keep its `ghost grey` classes: `Button` silently falls back to a solid green pill when the className carries no category/color class.
+  - **Emoji:** a new `Emoji` field on the `Workspace` Go struct, set via the `workspace.SetWorkspaceEmoji` service RPC. A non-blank emoji overrides the Font Awesome icon everywhere via the shared `WorkspaceIcon` component. Input is a one-glyph text field in the workspace editor (paste, or the OS picker — Win + `.` / Ctrl + Cmd + Space); it trims by _grapheme_, not by character, so multi-codepoint emoji (ZWJ sequences, skin tones) survive.
+  - **Sidebar mode persistence:** `layout:workspacesidebarcompact` on the **client** object, not the workspace — the sidebar must not change shape when you use it to switch workspaces.
+  - **Only saved workspaces appear.** `wcore.ListWorkspaces` filters out workspaces with no name/icon/color, so a fresh profile shows an empty sidebar with just the two footer buttons. That is expected, not a bug.
+  - Touches `pkg/waveobj/wtype.go`, `pkg/waveobj/wtypemeta.go`, `pkg/wcore/workspace.go`, `pkg/service/workspaceservice/workspaceservice.go`, `pkg/wconfig/settingsconfig.go`, `docs/docs/config.mdx`, new `frontend/app/tab/workspacesidebar.{tsx,scss}`, `workspacesidebar-model.ts`, `workspacesidebarenv.ts`, `workspaceicon.{tsx,scss}`, plus edits to `workspaceswitcher.tsx`, `workspaceeditor.{tsx,scss}`, `tabbar.tsx`, `tabbarenv.ts`, `vtabbar.tsx`, `vtabbarenv.ts`, `workspace.tsx`, `workspace-layout-model.ts`, and regenerated `gotypes.d.ts` / `services.ts` / `metaconsts.go` / `schema/settings.json` (via `task generate`).
 
 That's it. If you add more, document them here.
 
 ## Branch + remote layout
 
-| Branch | What it holds | What to do with it |
-|---|---|---|
-| `main` | Tracks `upstream/main` exactly — no local commits | Never commit here. Used only as the rebase base. |
+| Branch          | What it holds                                                                                                                             | What to do with it                                                                   |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `main`          | Tracks `upstream/main` exactly — no local commits                                                                                         | Never commit here. Used only as the rebase base.                                     |
 | `folders-first` | Your customization commits on top of `main` (the sort change, `.github/workflows/fork-build.yml`, this file, plus anything you add later) | Rebase onto `main` each time you pull upstream. Push to the fork to trigger a build. |
 
 Remotes:
@@ -100,7 +100,7 @@ git fetch upstream
 git checkout folders-first
 ```
 
-If the machine is only used to *install* Wave (not to build locally), you're done — downloads come from the Actions tab. No Node / Go / Task / Zig needed.
+If the machine is only used to _install_ Wave (not to build locally), you're done — downloads come from the Actions tab. No Node / Go / Task / Zig needed.
 
 If you also want to build locally, see upstream's `BUILD.md` for the toolchain (Node 22, Go 1.25+, Task, Zig on non-Mac). On Windows, tools installed via winget aren't added to PATH automatically — see `.claude-build-env.ps1` (gitignored) for a helper that prepends them.
 
@@ -125,3 +125,12 @@ If you want to rebuild without changing code (e.g., re-running after a flaky fai
 
 - [`.github/workflows/fork-build.yml`](.github/workflows/fork-build.yml) — the CI workflow that produces installers
 - `.claude-build-env.ps1` (gitignored, Windows only) — helper that sets PATH for local builds
+
+## Running the app locally (dev)
+
+Two gotchas cost a lot of time on 2026-08-09; both look like the app is broken when it isn't:
+
+- **`npm run dev` alone will not start.** `wavesrv` exits immediately with `invalid wcloud endpoint, WCLOUD_ENDPOINT not set`. Those endpoints are injected by the Taskfile, so always launch via `task dev` (or `task electron:winquickdev` on Windows, which skips cross-compilation).
+- **A black, non-resizable window is usually the dev-only 5s init timeout.** `WaveBrowserWindow.initializeTab` wraps `initPromise` in `awaitWithDevTimeout`, which only exists when `isDev`. If the renderer takes longer than 5000ms to initialize (easy on a cold Vite transform), it throws _before_ `setBounds`/`addChildView`, so the tab view is never attached and you get an empty black window. It is not a code defect and cannot happen in a packaged build. Check `tabview init NNNNms` in the log — if it's over 5000ms, that's the cause. Workaround: run from a prebuilt bundle instead (`npm run build:dev` then `task electron:start`), which inits in ~1s.
+
+Also: write `settings.json` without a BOM. PowerShell's `Set-Content -Encoding utf8` adds one on PS 5.1, and Go's JSON parser rejects the file, so the setting is silently ignored.
