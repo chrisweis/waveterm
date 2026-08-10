@@ -204,7 +204,8 @@ function makeViewMenu(
     webContents: electron.WebContents,
     callbacks: AppMenuCallbacks,
     isBuilderWindowFocused: boolean,
-    fullscreenOnLaunch: boolean
+    fullscreenOnLaunch: boolean,
+    workspaceSidebar: boolean
 ): Electron.MenuItemConstructorOptions[] {
     const devToolsAccel = unamePlatform === "darwin" ? "Option+Command+I" : "Alt+Shift+I";
     return [
@@ -321,8 +322,19 @@ function makeViewMenu(
                     const oref = `workspace:${workspaceId}`;
                     const meta = await RpcApi.GetMetaCommand(ElectronWshClient, { oref });
                     const current = meta?.["layout:widgetsvisible"] ?? true;
-                    await RpcApi.SetMetaCommand(ElectronWshClient, { oref, meta: { "layout:widgetsvisible": !current } });
+                    await RpcApi.SetMetaCommand(ElectronWshClient, {
+                        oref,
+                        meta: { "layout:widgetsvisible": !current },
+                    });
                 });
+            },
+        },
+        {
+            label: "Workspace Sidebar",
+            type: "checkbox",
+            checked: workspaceSidebar,
+            click: () => {
+                RpcApi.SetConfigCommand(ElectronWshClient, { "app:workspacesidebar": !workspaceSidebar });
             },
         },
     ];
@@ -335,16 +347,18 @@ async function makeFullAppMenu(callbacks: AppMenuCallbacks, workspaceOrBuilderId
 
     const isBuilderWindowFocused = focusedBuilderWindow != null;
     let fullscreenOnLaunch = false;
+    let workspaceSidebar = false;
     let fullConfig: FullConfigType = null;
     try {
         fullConfig = await RpcApi.GetFullConfigCommand(ElectronWshClient);
         fullscreenOnLaunch = fullConfig?.settings["window:fullscreenonlaunch"];
+        workspaceSidebar = fullConfig?.settings["app:workspacesidebar"] ?? false;
     } catch (e) {
         console.error("Error fetching config:", e);
     }
     const editMenu = makeEditMenu(fullConfig);
     const fileMenu = makeFileMenu(numWaveWindows, callbacks, fullConfig);
-    const viewMenu = makeViewMenu(webContents, callbacks, isBuilderWindowFocused, fullscreenOnLaunch);
+    const viewMenu = makeViewMenu(webContents, callbacks, isBuilderWindowFocused, fullscreenOnLaunch, workspaceSidebar);
     let workspaceMenu: Electron.MenuItemConstructorOptions[] = null;
     try {
         workspaceMenu = await getWorkspaceMenu();

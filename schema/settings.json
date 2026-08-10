@@ -50,7 +50,7 @@
             "left"
           ]
         },
-        "app:workspacerail": {
+        "app:workspacesidebar": {
           "type": "boolean"
         },
         "feature:waveappbuilder": {

@@ -52,7 +52,7 @@ class WorkspaceLayoutModel {
     private aiPanelWidth: number | null;
     private vtabWidth: number;
     private vtabVisible: boolean;
-    private railWidth: number;
+    private sidebarWidth: number;
     private transitionTimeoutRef: NodeJS.Timeout | null = null;
     private focusTimeoutRef: NodeJS.Timeout | null = null;
     private debouncedPersistAIWidth: () => void;
@@ -72,7 +72,7 @@ class WorkspaceLayoutModel {
         this.aiPanelWidth = null;
         this.vtabWidth = VTabBar_DefaultWidth;
         this.vtabVisible = false;
-        this.railWidth = 0;
+        this.sidebarWidth = 0;
         this.panelVisibleAtom = jotai.atom(false);
         this.widgetsSidebarVisibleAtom = jotai.atom(
             (get) =>
@@ -181,10 +181,10 @@ class WorkspaceLayoutModel {
         return clampVTabWidth(this.vtabWidth);
     }
 
-    // The workspace rail sits outside the panel group, so every px->% conversion has to be
+    // The workspace sidebar sits outside the panel group, so every px->% conversion has to be
     // against the width the panel group actually gets, not the full window.
     private availWidth(windowWidth: number): number {
-        return Math.max(1, windowWidth - this.railWidth);
+        return Math.max(1, windowWidth - this.sidebarWidth);
     }
 
     // ---- Core layout computation ----
@@ -397,9 +397,9 @@ class WorkspaceLayoutModel {
         return (aiW / total) * 100;
     }
 
-    setRailWidth(railWidth: number): void {
-        if (this.railWidth === railWidth) return;
-        this.railWidth = railWidth;
+    setSidebarWidth(sidebarWidth: number): void {
+        if (this.sidebarWidth === sidebarWidth) return;
+        this.sidebarWidth = sidebarWidth;
         this.commitLayouts(window.innerWidth);
     }
 

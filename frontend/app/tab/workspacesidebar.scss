@@ -1,7 +1,7 @@
 // .wave-button.ghost sets 8px padding on all sides, which is far too big for a 14px hover
 // affordance. Nested here so the selector outranks it without needing !important.
-.workspace-rail-item {
-    .wave-button.workspace-rail-edit-btn {
+.workspace-sidebar-item {
+    .wave-button.workspace-sidebar-edit-btn {
         padding: 0;
         gap: 0;
         justify-content: center;
@@ -13,7 +13,7 @@
     }
 }
 
-.workspace-rail-editor-popover {
+.workspace-sidebar-editor-popover {
     display: flex;
     width: 256px;
     min-height: auto;

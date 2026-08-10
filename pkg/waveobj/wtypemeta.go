@@ -104,7 +104,7 @@ type MetaTSType struct {
 	// for workspace
 	LayoutVTabBarWidth         int   `json:"layout:vtabbarwidth,omitempty"`
 	LayoutWidgetsVisible       *bool `json:"layout:widgetsvisible,omitempty"`
-	LayoutWorkspaceRailCompact *bool `json:"layout:workspacerailcompact,omitempty"`
+	LayoutWorkspaceSidebarCompact *bool `json:"layout:workspacesidebarcompact,omitempty"`
 
 	// for tabs+waveai
 	WaveAiPanelOpen     bool   `json:"waveai:panelopen,omitempty"`

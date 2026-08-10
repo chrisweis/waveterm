@@ -3,7 +3,7 @@
 
 import { WaveEnv, WaveEnvSubset } from "@/app/waveenv/waveenv";
 
-export type WorkspaceRailEnv = WaveEnvSubset<{
+export type WorkspaceSidebarEnv = WaveEnvSubset<{
     electron: {
         createWorkspace: WaveEnv["electron"]["createWorkspace"];
         switchWorkspace: WaveEnv["electron"]["switchWorkspace"];

@@ -1164,7 +1164,7 @@ declare global {
         "bg:activebordercolor"?: string;
         "layout:vtabbarwidth"?: number;
         "layout:widgetsvisible"?: boolean;
-        "layout:workspacerailcompact"?: boolean;
+        "layout:workspacesidebarcompact"?: boolean;
         "waveai:panelopen"?: boolean;
         "waveai:panelwidth"?: number;
         "waveai:model"?: string;
@@ -1388,7 +1388,7 @@ declare global {
         "app:disablectrlshiftdisplay"?: boolean;
         "app:focusfollowscursor"?: string;
         "app:tabbar"?: string;
-        "app:workspacerail"?: boolean;
+        "app:workspacesidebar"?: boolean;
         "feature:waveappbuilder"?: boolean;
         "ai:*"?: boolean;
         "ai:preset"?: string;

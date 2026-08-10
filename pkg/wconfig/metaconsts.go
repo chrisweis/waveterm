@@ -18,7 +18,7 @@ const (
 	ConfigKey_AppDisableCtrlShiftDisplay     = "app:disablectrlshiftdisplay"
 	ConfigKey_AppFocusFollowsCursor          = "app:focusfollowscursor"
 	ConfigKey_AppTabBar                      = "app:tabbar"
-	ConfigKey_AppWorkspaceRail               = "app:workspacerail"
+	ConfigKey_AppWorkspaceSidebar            = "app:workspacesidebar"
 
 	ConfigKey_FeatureWaveAppBuilder          = "feature:waveappbuilder"
 

@@ -51,7 +51,7 @@ VTabBarAIButton.displayName = "VTabBarAIButton";
 const MacOSHeader = memo(() => {
     const env = useWaveEnv<VTabBarEnv>();
     const isFullScreen = useAtomValue(env.atoms.isFullScreen);
-    const workspaceRailEnabled = useAtomValue(env.getSettingsKeyAtom("app:workspacerail")) ?? false;
+    const workspaceSidebarEnabled = useAtomValue(env.getSettingsKeyAtom("app:workspacesidebar")) ?? false;
     return (
         <>
             {!isFullScreen && (
@@ -70,7 +70,7 @@ const MacOSHeader = memo(() => {
                 style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
             >
                 <VTabBarAIButton />
-                {!workspaceRailEnabled && (
+                {!workspaceSidebarEnabled && (
                     <Tooltip
                         content="Workspace Switcher"
                         placement="bottom"
