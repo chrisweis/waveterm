@@ -66,40 +66,54 @@ func (svc *WorkspaceService) UpdateWorkspace(ctx context.Context, workspaceId st
 	return updates, nil
 }
 
-func (svc *WorkspaceService) SetWorkspacePinned_Meta() tsgenmeta.MethodMeta {
-	return tsgenmeta.MethodMeta{
-		ArgNames: []string{"workspaceId", "pinned"},
-	}
-}
-
-func (svc *WorkspaceService) SetWorkspacePinned(workspaceId string, pinned bool) error {
-	ctx, cancelFn := context.WithTimeout(context.Background(), DefaultTimeout)
-	defer cancelFn()
-	if err := wcore.SetPinned(ctx, workspaceId, pinned); err != nil {
-		return fmt.Errorf("error setting workspace pinned: %w", err)
-	}
+// Event_WorkspaceUpdate alone is only a "refetch me" ping. Consumers that read the workspace
+// through its WaveObj atom (the workspace sidebar) need the changed object pushed to them via
+// SendUpdateEvents, exactly as UpdateWorkspace does -- otherwise their copy stays stale and the
+// edit appears to revert.
+func sendWorkspaceUpdates(ctx context.Context, label string) waveobj.UpdatesRtnType {
 	wps.Broker.Publish(wps.WaveEvent{
 		Event: wps.Event_WorkspaceUpdate,
 	})
-	return nil
+	updates := waveobj.ContextGetUpdatesRtn(ctx)
+	go func() {
+		defer func() {
+			panichandler.PanicHandler(label, recover())
+		}()
+		wps.Broker.SendUpdateEvents(updates)
+	}()
+	return updates
+}
+
+func (svc *WorkspaceService) SetWorkspacePinned_Meta() tsgenmeta.MethodMeta {
+	return tsgenmeta.MethodMeta{
+		ArgNames: []string{"ctx", "workspaceId", "pinned"},
+	}
+}
+
+func (svc *WorkspaceService) SetWorkspacePinned(ctx context.Context, workspaceId string, pinned bool) (waveobj.UpdatesRtnType, error) {
+	ctx = waveobj.ContextWithUpdates(ctx)
+	ctx, cancelFn := context.WithTimeout(ctx, DefaultTimeout)
+	defer cancelFn()
+	if err := wcore.SetPinned(ctx, workspaceId, pinned); err != nil {
+		return nil, fmt.Errorf("error setting workspace pinned: %w", err)
+	}
+	return sendWorkspaceUpdates(ctx, "WorkspaceService:SetWorkspacePinned:SendUpdateEvents"), nil
 }
 
 func (svc *WorkspaceService) SetWorkspaceEmoji_Meta() tsgenmeta.MethodMeta {
 	return tsgenmeta.MethodMeta{
-		ArgNames: []string{"workspaceId", "emoji"},
+		ArgNames: []string{"ctx", "workspaceId", "emoji"},
 	}
 }
 
-func (svc *WorkspaceService) SetWorkspaceEmoji(workspaceId string, emoji string) error {
-	ctx, cancelFn := context.WithTimeout(context.Background(), DefaultTimeout)
+func (svc *WorkspaceService) SetWorkspaceEmoji(ctx context.Context, workspaceId string, emoji string) (waveobj.UpdatesRtnType, error) {
+	ctx = waveobj.ContextWithUpdates(ctx)
+	ctx, cancelFn := context.WithTimeout(ctx, DefaultTimeout)
 	defer cancelFn()
 	if err := wcore.SetEmoji(ctx, workspaceId, emoji); err != nil {
-		return fmt.Errorf("error setting workspace emoji: %w", err)
+		return nil, fmt.Errorf("error setting workspace emoji: %w", err)
 	}
-	wps.Broker.Publish(wps.WaveEvent{
-		Event: wps.Event_WorkspaceUpdate,
-	})
-	return nil
+	return sendWorkspaceUpdates(ctx, "WorkspaceService:SetWorkspaceEmoji:SendUpdateEvents"), nil
 }
 
 func (svc *WorkspaceService) GetWorkspace_Meta() tsgenmeta.MethodMeta {

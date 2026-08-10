@@ -473,8 +473,7 @@ func SetPinned(ctx context.Context, workspaceId string, pinned bool) error {
 		return fmt.Errorf("workspace not found: %q", workspaceId)
 	}
 	ws.Pinned = pinned
-	wstore.DBUpdate(ctx, ws)
-	return nil
+	return wstore.DBUpdate(ctx, ws)
 }
 
 func SetEmoji(ctx context.Context, workspaceId string, emoji string) error {
@@ -486,6 +485,5 @@ func SetEmoji(ctx context.Context, workspaceId string, emoji string) error {
 		return fmt.Errorf("workspace not found: %q", workspaceId)
 	}
 	ws.Emoji = emoji
-	wstore.DBUpdate(ctx, ws)
-	return nil
+	return wstore.DBUpdate(ctx, ws)
 }
