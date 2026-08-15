@@ -205,7 +205,8 @@ function makeViewMenu(
     callbacks: AppMenuCallbacks,
     isBuilderWindowFocused: boolean,
     fullscreenOnLaunch: boolean,
-    workspaceSidebar: boolean
+    workspaceSidebar: boolean,
+    activityGlow: boolean
 ): Electron.MenuItemConstructorOptions[] {
     const devToolsAccel = unamePlatform === "darwin" ? "Option+Command+I" : "Alt+Shift+I";
     return [
@@ -337,6 +338,14 @@ function makeViewMenu(
                 RpcApi.SetConfigCommand(ElectronWshClient, { "app:workspacesidebar": !workspaceSidebar });
             },
         },
+        {
+            label: "Recent Activity Glow",
+            type: "checkbox",
+            checked: activityGlow,
+            click: () => {
+                RpcApi.SetConfigCommand(ElectronWshClient, { "app:activityglow": !activityGlow });
+            },
+        },
     ];
 }
 
@@ -348,17 +357,26 @@ async function makeFullAppMenu(callbacks: AppMenuCallbacks, workspaceOrBuilderId
     const isBuilderWindowFocused = focusedBuilderWindow != null;
     let fullscreenOnLaunch = false;
     let workspaceSidebar = false;
+    let activityGlow = false;
     let fullConfig: FullConfigType = null;
     try {
         fullConfig = await RpcApi.GetFullConfigCommand(ElectronWshClient);
         fullscreenOnLaunch = fullConfig?.settings["window:fullscreenonlaunch"];
         workspaceSidebar = fullConfig?.settings["app:workspacesidebar"] ?? false;
+        activityGlow = fullConfig?.settings["app:activityglow"] ?? false;
     } catch (e) {
         console.error("Error fetching config:", e);
     }
     const editMenu = makeEditMenu(fullConfig);
     const fileMenu = makeFileMenu(numWaveWindows, callbacks, fullConfig);
-    const viewMenu = makeViewMenu(webContents, callbacks, isBuilderWindowFocused, fullscreenOnLaunch, workspaceSidebar);
+    const viewMenu = makeViewMenu(
+        webContents,
+        callbacks,
+        isBuilderWindowFocused,
+        fullscreenOnLaunch,
+        workspaceSidebar,
+        activityGlow
+    );
     let workspaceMenu: Electron.MenuItemConstructorOptions[] = null;
     try {
         workspaceMenu = await getWorkspaceMenu();

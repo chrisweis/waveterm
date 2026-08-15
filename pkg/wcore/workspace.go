@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log"
 	"regexp"
-	"sort"
 	"strconv"
 	"time"
 
@@ -398,10 +397,6 @@ func ListWorkspaces(ctx context.Context) (waveobj.WorkspaceList, error) {
 		workspaceToWindow[window.WorkspaceId] = window.OID
 	}
 
-	sort.SliceStable(workspaces, func(i, j int) bool {
-		return workspaces[i].Pinned && !workspaces[j].Pinned
-	})
-
 	var wl waveobj.WorkspaceList
 	for _, workspace := range workspaces {
 		if workspace.Name == "" || workspace.Icon == "" || workspace.Color == "" {
@@ -462,18 +457,6 @@ func SetName(workspaceId string, name string) error {
 	ws.Name = name
 	wstore.DBUpdate(ctx, ws)
 	return nil
-}
-
-func SetPinned(ctx context.Context, workspaceId string, pinned bool) error {
-	ws, e := wstore.DBGet[*waveobj.Workspace](ctx, workspaceId)
-	if e != nil {
-		return e
-	}
-	if ws == nil {
-		return fmt.Errorf("workspace not found: %q", workspaceId)
-	}
-	ws.Pinned = pinned
-	return wstore.DBUpdate(ctx, ws)
 }
 
 func SetEmoji(ctx context.Context, workspaceId string, emoji string) error {

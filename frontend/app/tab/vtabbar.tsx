@@ -11,7 +11,8 @@ import { WorkspaceLayoutModel } from "@/app/workspace/workspace-layout-model";
 import { validateCssColor } from "@/util/color-validator";
 import { cn, fireAndForget } from "@/util/util";
 import { useAtomValue } from "jotai";
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useActivityAlphas } from "./activityglow";
 import { buildTabBarContextMenu, buildTabContextMenu } from "./tabcontextmenu";
 import { UpdateStatusBanner } from "./updatebanner";
 import { VTab, VTabItem } from "./vtab";
@@ -98,6 +99,7 @@ interface VTabWrapperProps {
     showDivider: boolean;
     isDragging: boolean;
     isReordering: boolean;
+    activityAlpha?: number;
     hoverResetVersion: number;
     index: number;
     onSelect: () => void;
@@ -116,6 +118,7 @@ function VTabWrapper({
     showDivider,
     isDragging,
     isReordering,
+    activityAlpha,
     hoverResetVersion,
     onSelect,
     onClose,
@@ -178,6 +181,7 @@ function VTabWrapper({
             showDivider={showDivider}
             isDragging={isDragging}
             isReordering={isReordering}
+            activityAlpha={activityAlpha}
             onSelect={onSelect}
             onClose={onClose}
             onRename={onRename}
@@ -200,6 +204,8 @@ export function VTabBar({ workspace, className }: VTabBarProps) {
     const tabIds = workspace?.tabids ?? [];
 
     const [orderedTabIds, setOrderedTabIds] = useState<string[]>(tabIds);
+    const tabOrefs = useMemo(() => orderedTabIds.map((id) => makeORef("tab", id)), [orderedTabIds]);
+    const activityAlphas = useActivityAlphas(tabOrefs);
     const [dragTabId, setDragTabId] = useState<string | null>(null);
     const [dropIndex, setDropIndex] = useState<number | null>(null);
     const [dropLineTop, setDropLineTop] = useState<number | null>(null);
@@ -379,6 +385,7 @@ export function VTabBar({ workspace, className }: VTabBarProps) {
                             }
                             isDragging={dragTabId === tabId}
                             isReordering={dragTabId != null}
+                            activityAlpha={activityAlphas[makeORef("tab", tabId)]}
                             hoverResetVersion={hoverResetVersion}
                             index={index}
                             onSelect={() => env.electron.setActiveTab(tabId)}

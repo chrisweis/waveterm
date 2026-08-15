@@ -84,22 +84,6 @@ func sendWorkspaceUpdates(ctx context.Context, label string) waveobj.UpdatesRtnT
 	return updates
 }
 
-func (svc *WorkspaceService) SetWorkspacePinned_Meta() tsgenmeta.MethodMeta {
-	return tsgenmeta.MethodMeta{
-		ArgNames: []string{"ctx", "workspaceId", "pinned"},
-	}
-}
-
-func (svc *WorkspaceService) SetWorkspacePinned(ctx context.Context, workspaceId string, pinned bool) (waveobj.UpdatesRtnType, error) {
-	ctx = waveobj.ContextWithUpdates(ctx)
-	ctx, cancelFn := context.WithTimeout(ctx, DefaultTimeout)
-	defer cancelFn()
-	if err := wcore.SetPinned(ctx, workspaceId, pinned); err != nil {
-		return nil, fmt.Errorf("error setting workspace pinned: %w", err)
-	}
-	return sendWorkspaceUpdates(ctx, "WorkspaceService:SetWorkspacePinned:SendUpdateEvents"), nil
-}
-
 func (svc *WorkspaceService) SetWorkspaceEmoji_Meta() tsgenmeta.MethodMeta {
 	return tsgenmeta.MethodMeta{
 		ArgNames: []string{"ctx", "workspaceId", "emoji"},

@@ -23,8 +23,7 @@ const workspaceOrderAtom = jotai.atom<string[]>((get) => {
 
 // Ids the saved order has never seen (workspaces created since the last drag) keep their incoming
 // relative order and land at the end, rather than jumping to the top. With no saved order at all the
-// backend's own sequence is preserved untouched, which is what keeps pinned-first working until the
-// user actually drags something.
+// backend's own sequence is preserved untouched.
 export function applyWorkspaceOrder(ids: string[], order: string[]): string[] {
     if (order.length === 0) {
         return ids;

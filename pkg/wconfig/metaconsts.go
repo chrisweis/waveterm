@@ -19,6 +19,7 @@ const (
 	ConfigKey_AppFocusFollowsCursor          = "app:focusfollowscursor"
 	ConfigKey_AppTabBar                      = "app:tabbar"
 	ConfigKey_AppWorkspaceSidebar            = "app:workspacesidebar"
+	ConfigKey_AppActivityGlow                = "app:activityglow"
 
 	ConfigKey_FeatureWaveAppBuilder          = "feature:waveappbuilder"
 

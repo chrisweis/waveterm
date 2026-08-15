@@ -53,6 +53,9 @@
         "app:workspacesidebar": {
           "type": "boolean"
         },
+        "app:activityglow": {
+          "type": "boolean"
+        },
         "feature:waveappbuilder": {
           "type": "boolean"
         },

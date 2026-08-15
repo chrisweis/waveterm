@@ -212,11 +212,6 @@ export class WorkspaceServiceType {
     }
 
     // @returns object updates
-    SetWorkspacePinned(workspaceId: string, pinned: boolean): Promise<void> {
-        return callBackendService(this?.waveEnv, "workspace", "SetWorkspacePinned", Array.from(arguments))
-    }
-
-    // @returns object updates
     UpdateWorkspace(workspaceId: string, name: string, icon: string, color: string, applyDefaults: boolean): Promise<void> {
         return callBackendService(this?.waveEnv, "workspace", "UpdateWorkspace", Array.from(arguments))
     }

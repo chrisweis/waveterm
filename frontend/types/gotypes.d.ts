@@ -1167,6 +1167,8 @@ declare global {
         "layout:workspacesidebarcompact"?: boolean;
         "layout:workspacesidebarwidth"?: number;
         "layout:workspaceorder"?: string[];
+        "activity:score"?: number;
+        "activity:ts"?: number;
         "waveai:panelopen"?: boolean;
         "waveai:panelwidth"?: number;
         "waveai:model"?: string;
@@ -1391,6 +1393,7 @@ declare global {
         "app:focusfollowscursor"?: string;
         "app:tabbar"?: string;
         "app:workspacesidebar"?: boolean;
+        "app:activityglow"?: boolean;
         "feature:waveappbuilder"?: boolean;
         "ai:*"?: boolean;
         "ai:preset"?: string;

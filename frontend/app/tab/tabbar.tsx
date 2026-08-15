@@ -10,8 +10,10 @@ import { isMacOSTahoeOrLater } from "@/util/platformutil";
 import { fireAndForget } from "@/util/util";
 import { useAtomValue } from "jotai";
 import { OverlayScrollbars } from "overlayscrollbars";
-import { createRef, memo, useCallback, useEffect, useRef, useState } from "react";
+import { createRef, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { debounce } from "throttle-debounce";
+import { makeORef } from "../store/wos";
+import { useActivityAlphas } from "./activityglow";
 import { Tab } from "./tab";
 import "./tabbar.scss";
 import { TabBarEnv } from "./tabbarenv";
@@ -284,6 +286,11 @@ const TabBar = memo(({ workspace, noTabs }: TabBarProps) => {
                 prevAllLoadedRef.current = true;
             }
         }
+        // noTabs is load-bearing here. Tabs start at opacity 0 and are only revealed by
+        // setSizeAndPosition, and they unmount entirely while the left tab bar is active. On the way
+        // back, handleTabLoaded sees tabsLoaded[tabId] already true from the previous mount and
+        // returns prev unchanged, so nothing else in this list changes and the freshly mounted tabs
+        // are never positioned -- they stay invisible until TabBar remounts on a workspace switch.
     }, [
         tabIds,
         tabsLoaded,
@@ -293,6 +300,7 @@ const TabBar = memo(({ workspace, noTabs }: TabBarProps) => {
         appUpdateStatus,
         zoomFactor,
         showMenuBar,
+        noTabs,
     ]);
 
     const getDragDirection = (currentX: number) => {
@@ -566,6 +574,8 @@ const TabBar = memo(({ workspace, noTabs }: TabBarProps) => {
     }, []);
 
     const activeTabIndex = tabIds.indexOf(activeTabId);
+    const tabOrefs = useMemo(() => tabIds.map((id) => makeORef("tab", id)), [tabIds]);
+    const activityAlphas = useActivityAlphas(tabOrefs);
 
     function onEllipsisClick() {
         env.electron.showWorkspaceAppMenu(workspace.oid);
@@ -577,9 +587,7 @@ const TabBar = memo(({ workspace, noTabs }: TabBarProps) => {
     // Calculate window drag left width based on platform and state
     let windowDragLeftWidth = 10;
     if (env.isMacOS() && !isFullScreen) {
-        const trafficLightsWidth = isMacOSTahoeOrLater()
-            ? MacOSTahoeTrafficLightsWidth
-            : MacOSTrafficLightsWidth;
+        const trafficLightsWidth = isMacOSTahoeOrLater() ? MacOSTahoeTrafficLightsWidth : MacOSTrafficLightsWidth;
         if (zoomFactor > 0) {
             windowDragLeftWidth = trafficLightsWidth / zoomFactor;
         } else {
@@ -653,6 +661,7 @@ const TabBar = memo(({ workspace, noTabs }: TabBarProps) => {
                                     isDragging={draggingTab === tabId}
                                     tabWidth={tabWidthRef.current}
                                     isNew={tabId === newTabId}
+                                    activityAlpha={activityAlphas[makeORef("tab", tabId)]}
                                 />
                             );
                         })}

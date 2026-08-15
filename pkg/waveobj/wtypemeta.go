@@ -108,6 +108,11 @@ type MetaTSType struct {
 	LayoutWorkspaceSidebarWidth   int      `json:"layout:workspacesidebarwidth,omitempty"`
 	LayoutWorkspaceOrder          []string `json:"layout:workspaceorder,omitempty"`
 
+	// recency glow, on both tabs and workspaces. Score is an exponentially-decayed usage count and
+	// is only meaningful together with the timestamp it was last decayed to.
+	ActivityScore float64 `json:"activity:score,omitempty"`
+	ActivityTs    int64   `json:"activity:ts,omitempty"`
+
 	// for tabs+waveai
 	WaveAiPanelOpen     bool   `json:"waveai:panelopen,omitempty"`
 	WaveAiPanelWidth    int    `json:"waveai:panelwidth,omitempty"`

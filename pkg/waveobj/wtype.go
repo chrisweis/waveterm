@@ -172,16 +172,18 @@ type ActiveTabUpdate struct {
 }
 
 type Workspace struct {
-	OID         string      `json:"oid"`
-	Version     int         `json:"version"`
-	Name        string      `json:"name,omitempty"`
-	Icon        string      `json:"icon,omitempty"`
-	Color       string      `json:"color,omitempty"`
-	TabIds      []string    `json:"tabids"`
-	ActiveTabId string      `json:"activetabid"`
-	Pinned      bool        `json:"pinned,omitempty"`
-	Emoji       string      `json:"emoji,omitempty"`
-	Meta        MetaMapType `json:"meta"`
+	OID         string   `json:"oid"`
+	Version     int      `json:"version"`
+	Name        string   `json:"name,omitempty"`
+	Icon        string   `json:"icon,omitempty"`
+	Color       string   `json:"color,omitempty"`
+	TabIds      []string `json:"tabids"`
+	ActiveTabId string   `json:"activetabid"`
+	// Vestigial. Pinning was superseded by manual drag ordering (layout:workspaceorder on the
+	// client); nothing reads this any more. Kept so existing rows deserialize unchanged.
+	Pinned bool        `json:"pinned,omitempty"`
+	Emoji  string      `json:"emoji,omitempty"`
+	Meta   MetaMapType `json:"meta"`
 }
 
 func (*Workspace) GetOType() string {

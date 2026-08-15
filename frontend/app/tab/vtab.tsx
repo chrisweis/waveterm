@@ -5,6 +5,7 @@ import { refocusNode } from "@/app/store/global";
 import { validateCssColor } from "@/util/color-validator";
 import { cn } from "@/util/util";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { activityGlowStyle } from "./activityglow";
 import { TabBadges } from "./tabbadges";
 
 const RenameFocusDelayMs = 50;
@@ -23,6 +24,7 @@ interface VTabProps {
     showDivider?: boolean;
     isDragging: boolean;
     isReordering: boolean;
+    activityAlpha?: number;
     onSelect: () => void;
     onClose?: () => void;
     onRename?: (newName: string) => void;
@@ -41,6 +43,7 @@ export function VTab({
     showDivider = true,
     isDragging,
     isReordering,
+    activityAlpha,
     onSelect,
     onClose,
     onRename,
@@ -145,6 +148,8 @@ export function VTab({
         event.stopPropagation();
     };
 
+    const activityGlow = activityGlowStyle(activityAlpha);
+
     return (
         <div
             draggable
@@ -168,6 +173,9 @@ export function VTab({
                 isDragging && "opacity-50"
             )}
         >
+            {activityGlow != null && (
+                <div className="pointer-events-none absolute inset-x-1 inset-y-[4px] rounded-sm" style={activityGlow} />
+            )}
             {active && (
                 <div className="pointer-events-none absolute inset-x-1 inset-y-[4px] rounded-sm bg-foreground/10" />
             )}

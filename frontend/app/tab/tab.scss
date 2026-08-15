@@ -28,6 +28,14 @@
         height: 100%;
         white-space: nowrap;
         border-radius: 6px;
+
+        // Matches the .active background's shape so the two stack cleanly on the active tab.
+        .activity-glow {
+            position: absolute;
+            inset: 0;
+            border-radius: 6px;
+            pointer-events: none;
+        }
     }
 
     &.animate {
@@ -138,4 +146,3 @@ body.nohover .tab.active .close {
 .tab.new-tab {
     animation: expandWidthAndFadeIn 0.1s forwards;
 }
-

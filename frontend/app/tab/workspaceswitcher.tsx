@@ -16,11 +16,12 @@ import { fireAndForget, useAtomValueSafe } from "@/util/util";
 import clsx from "clsx";
 import { atom, useAtom, useSetAtom } from "jotai";
 import { OverlayScrollbarsComponent, OverlayScrollbarsComponentRef } from "overlayscrollbars-react";
-import { CSSProperties, forwardRef, useCallback, useEffect } from "react";
+import { CSSProperties, forwardRef, useCallback, useEffect, useMemo } from "react";
 import WorkspaceSVG from "../asset/workspace.svg";
 import { IconButton } from "../element/iconbutton";
 import { makeORef } from "../store/wos";
 import { waveEventSubscribeSingle } from "../store/wps";
+import { activityGlowStyle, useActivityAlphas } from "./activityglow";
 import { WorkspaceEditor } from "./workspaceeditor";
 import { WorkspaceIcon } from "./workspaceicon";
 import { useWorkspaceReorder } from "./workspaceorder";
@@ -56,9 +57,14 @@ const WorkspaceSwitcher = forwardRef<HTMLDivElement>((_, ref) => {
     const activeWorkspace = useAtomValueSafe(env.atoms.workspace);
     const setEditingWorkspace = useSetAtom(editingWorkspaceAtom);
     const reorder = useWorkspaceReorder(workspaceEntries, (entry) => entry.workspace.oid);
+    const workspaceOrefs = useMemo(
+        () => reorder.ordered.map((entry) => makeORef("workspace", entry.workspace.oid)),
+        [reorder.ordered]
+    );
+    const activityAlphas = useActivityAlphas(workspaceOrefs);
 
     // The popover content (and this scroll container) mounts fresh on each open. Reset the
-    // viewport to the top so the pinned workspaces at the top of the list are shown first.
+    // viewport to the top so the list always opens at the first workspace.
     const scrollableRef = useCallback((instance: OverlayScrollbarsComponentRef) => {
         if (!instance) {
             return;
@@ -165,6 +171,7 @@ const WorkspaceSwitcher = forwardRef<HTMLDivElement>((_, ref) => {
                                 isDragging={reorder.dragId === entry.workspace.oid}
                                 dropBefore={reorder.dropBefore(index)}
                                 dropAfter={reorder.dropAfter(index)}
+                                activityAlpha={activityAlphas[makeORef("workspace", entry.workspace.oid)]}
                                 dragProps={reorder.dragItemProps(index)}
                                 onDeleteWorkspace={onDeleteWorkspace}
                             />
@@ -200,6 +207,7 @@ const WorkspaceSwitcherItem = ({
     isDragging,
     dropBefore,
     dropAfter,
+    activityAlpha,
     dragProps,
     onDeleteWorkspace,
 }: {
@@ -208,6 +216,7 @@ const WorkspaceSwitcherItem = ({
     isDragging: boolean;
     dropBefore: boolean;
     dropAfter: boolean;
+    activityAlpha: number;
     dragProps: React.HTMLAttributes<HTMLDivElement> & { draggable: boolean };
     onDeleteWorkspace: (workspaceId: string) => void;
 }) => {
@@ -267,19 +276,8 @@ const WorkspaceSwitcherItem = ({
         title: isCurrentWorkspace ? "This is your current workspace" : "This workspace is open",
     };
 
-    const isPinned = !!workspace.pinned;
-    const pinIconDecl: IconButtonDecl = {
-        elemtype: "iconbutton",
-        className: clsx("pin", { pinned: isPinned }),
-        icon: isPinned ? "solid@thumbtack" : "regular@thumbtack",
-        title: isPinned ? "Unpin workspace" : "Pin workspace",
-        click: (e) => {
-            e.stopPropagation();
-            fireAndForget(() => env.services.workspace.SetWorkspacePinned(workspace.oid, !isPinned));
-        },
-    };
-
     const isEditing = editingWorkspace === workspace.oid;
+    const activityGlow = activityGlowStyle(activityAlpha);
 
     const onContextMenu = useCallback(
         (e: React.MouseEvent) => {
@@ -288,11 +286,6 @@ const WorkspaceSwitcherItem = ({
             env.showContextMenu(
                 [
                     { label: "Edit Workspace...", click: () => setEditingWorkspace(workspace.oid) },
-                    {
-                        label: isPinned ? "Unpin Workspace" : "Pin Workspace",
-                        click: () =>
-                            fireAndForget(() => env.services.workspace.SetWorkspacePinned(workspace.oid, !isPinned)),
-                    },
                     { type: "separator" },
                     { label: "New Workspace", click: () => env.electron.createWorkspace() },
                     { type: "separator" },
@@ -301,7 +294,7 @@ const WorkspaceSwitcherItem = ({
                 e
             );
         },
-        [workspace.oid, isPinned, onDeleteWorkspace]
+        [workspace.oid, onDeleteWorkspace]
     );
 
     return (
@@ -327,6 +320,7 @@ const WorkspaceSwitcherItem = ({
                     onContextMenu={onContextMenu}
                     {...dragProps}
                 >
+                    {activityGlow != null && <div className="activity-glow" style={activityGlow} />}
                     {dropBefore && <div className="drop-indicator before" />}
                     {dropAfter && <div className="drop-indicator after" />}
                     <ExpandableMenuItemLeftElement>
@@ -342,7 +336,6 @@ const WorkspaceSwitcherItem = ({
                         <div className="icons">
                             <IconButton decl={editIconDecl} />
                             <IconButton decl={windowIconDecl} />
-                            <IconButton decl={pinIconDecl} />
                         </div>
                     </ExpandableMenuItemRightElement>
                 </div>

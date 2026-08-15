@@ -8,8 +8,9 @@ import { makeORef } from "@/app/store/wos";
 import { useWaveEnv } from "@/app/waveenv/waveenv";
 import { cn, fireAndForget, useAtomValueSafe } from "@/util/util";
 import { useAtomValue } from "jotai";
-import { memo, useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { waveEventSubscribeSingle } from "../store/wps";
+import { activityGlowStyle, useActivityAlphas } from "./activityglow";
 import { WorkspaceEditor } from "./workspaceeditor";
 import { WorkspaceIcon } from "./workspaceicon";
 import { useWorkspaceReorder } from "./workspaceorder";
@@ -29,6 +30,7 @@ interface WorkspaceSidebarItemProps {
     isDragging: boolean;
     dropBefore: boolean;
     dropAfter: boolean;
+    activityAlpha: number;
     dragProps: React.HTMLAttributes<HTMLDivElement> & { draggable: boolean };
     onSelect: (workspaceId: string) => void;
     onDeleteWorkspace: (workspaceId: string) => void;
@@ -42,6 +44,7 @@ const WorkspaceSidebarItem = memo(
         isDragging,
         dropBefore,
         dropAfter,
+        activityAlpha,
         dragProps,
         onSelect,
         onDeleteWorkspace,
@@ -68,10 +71,6 @@ const WorkspaceSidebarItem = memo(
             fireAndForget(() => env.services.workspace.SetWorkspaceEmoji(next.oid, emoji));
         }, []);
 
-        const togglePinned = useCallback((next: Workspace) => {
-            fireAndForget(() => env.services.workspace.SetWorkspacePinned(next.oid, !next.pinned));
-        }, []);
-
         const workspace = draft ?? liveWorkspace;
 
         const onContextMenu = useCallback(
@@ -84,10 +83,6 @@ const WorkspaceSidebarItem = memo(
                 env.showContextMenu(
                     [
                         { label: "Edit Workspace...", click: () => setEditing(true) },
-                        {
-                            label: workspace.pinned ? "Unpin Workspace" : "Pin Workspace",
-                            click: () => togglePinned(workspace),
-                        },
                         { type: "separator" },
                         { label: "New Workspace", click: () => env.electron.createWorkspace() },
                         { type: "separator" },
@@ -104,7 +99,7 @@ const WorkspaceSidebarItem = memo(
         }
 
         const isOpen = !!entry.windowId;
-        const isPinned = !!workspace.pinned;
+        const activityGlow = activityGlowStyle(activityAlpha);
 
         // The editor is opened only from the context menu, so the popover's anchor carries no
         // pointer events of its own -- it exists purely to give floating-ui something to position
@@ -141,14 +136,12 @@ const WorkspaceSidebarItem = memo(
             </Popover>
         );
 
+        // Tooltip's `disable` must stay constant here. It renders a plain div when disabled and
+        // <TooltipInner> when not, so flipping it mid-drag swaps the component type and React
+        // unmounts the row being dragged -- Chromium never fires dragend on a removed node, which
+        // strands the drop line and loses the reorder.
         return (
-            <Tooltip
-                content={workspace.name}
-                placement="right"
-                openDelay={0}
-                hideOnClick
-                disable={isDragging || editing}
-            >
+            <Tooltip content={workspace.name} placement="right" openDelay={0} hideOnClick>
                 <div
                     className={cn(
                         "workspace-sidebar-item group relative mx-1.5 flex h-9 cursor-pointer items-center rounded-md transition-colors select-none",
@@ -160,6 +153,9 @@ const WorkspaceSidebarItem = memo(
                     onContextMenu={onContextMenu}
                     {...dragProps}
                 >
+                    {activityGlow != null && (
+                        <div className="pointer-events-none absolute inset-0 rounded-md" style={activityGlow} />
+                    )}
                     {dropBefore && (
                         <div className="pointer-events-none absolute inset-x-0 -top-px h-0.5 rounded-full bg-accent" />
                     )}
@@ -180,24 +176,9 @@ const WorkspaceSidebarItem = memo(
                             <div className={cn("truncate text-[12px]", isCurrent ? "text-primary" : "text-secondary")}>
                                 {workspace.name}
                             </div>
-                            <div className="ml-auto flex shrink-0 items-center gap-1">
-                                <i
-                                    className={cn(
-                                        "fa fa-thumbtack cursor-pointer text-[10px] transition-opacity hover:text-primary",
-                                        isPinned
-                                            ? "fa-solid text-secondary/70 opacity-100"
-                                            : "fa-regular text-secondary/70 opacity-0 group-hover:opacity-100"
-                                    )}
-                                    title={isPinned ? "Unpin workspace" : "Pin workspace"}
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        togglePinned(workspace);
-                                    }}
-                                />
-                                {isOpen && !isCurrent && (
-                                    <i className="fa fa-solid fa-circle text-[5px] text-secondary/50" />
-                                )}
-                            </div>
+                            {isOpen && !isCurrent && (
+                                <i className="fa fa-solid fa-circle ml-auto shrink-0 text-[5px] text-secondary/50" />
+                            )}
                         </>
                     )}
                     {compact && isOpen && !isCurrent && (
@@ -325,6 +306,11 @@ export const WorkspaceSidebar = memo(() => {
     }, []);
 
     const reorder = useWorkspaceReorder(entries, (entry) => entry.workspaceId);
+    const workspaceOrefs = useMemo(
+        () => reorder.ordered.map((entry) => makeORef("workspace", entry.workspaceId)),
+        [reorder.ordered]
+    );
+    const activityAlphas = useActivityAlphas(workspaceOrefs);
 
     // The right edge carries a real resize handle in expanded mode only. Compact mode is a fixed
     // 48px icon strip, so it deliberately shows no edge affordance at all.
@@ -346,6 +332,7 @@ export const WorkspaceSidebar = memo(() => {
                         isDragging={reorder.dragId === entry.workspaceId}
                         dropBefore={reorder.dropBefore(index)}
                         dropAfter={reorder.dropAfter(index)}
+                        activityAlpha={activityAlphas[makeORef("workspace", entry.workspaceId)]}
                         dragProps={reorder.dragItemProps(index)}
                         onSelect={onSelect}
                         onDeleteWorkspace={onDeleteWorkspace}

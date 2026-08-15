@@ -105,6 +105,9 @@ const (
 	MetaKey_LayoutWorkspaceSidebarWidth      = "layout:workspacesidebarwidth"
 	MetaKey_LayoutWorkspaceOrder             = "layout:workspaceorder"
 
+	MetaKey_ActivityScore                    = "activity:score"
+	MetaKey_ActivityTs                       = "activity:ts"
+
 	MetaKey_WaveAiPanelOpen                  = "waveai:panelopen"
 	MetaKey_WaveAiPanelWidth                 = "waveai:panelwidth"
 	MetaKey_WaveAiModel                      = "waveai:model"

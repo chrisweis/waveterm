@@ -101,6 +101,13 @@
                 opacity: 0.4;
             }
 
+            .activity-glow {
+                position: absolute;
+                inset: 0;
+                border-radius: 4px;
+                pointer-events: none;
+            }
+
             .drop-indicator {
                 position: absolute;
                 left: 0;
@@ -139,13 +146,8 @@
                 }
             }
 
-            .wave-iconbutton.edit,
-            .wave-iconbutton.pin {
+            .wave-iconbutton.edit {
                 visibility: hidden;
-            }
-
-            .wave-iconbutton.pin.pinned {
-                visibility: visible;
             }
 
             .wave-iconbutton.window {
@@ -158,8 +160,7 @@
             }
         }
 
-        &:hover .wave-iconbutton.edit,
-        &:hover .wave-iconbutton.pin {
+        &:hover .wave-iconbutton.edit {
             visibility: visible;
         }
 

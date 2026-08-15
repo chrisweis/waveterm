@@ -6,6 +6,8 @@ import { ErrorBoundary } from "@/app/element/errorboundary";
 import { CenteredDiv } from "@/app/element/quickelems";
 import { ModalsRenderer } from "@/app/modals/modalsrenderer";
 import { isBuilderWindow } from "@/app/store/windowtype";
+import { makeORef } from "@/app/store/wos";
+import { ActivityDwellMs, recordActivity } from "@/app/tab/activityglow";
 import { TabBar } from "@/app/tab/tabbar";
 import { TabContent } from "@/app/tab/tabcontent";
 import { VTabBar } from "@/app/tab/vtabbar";
@@ -103,6 +105,20 @@ const WorkspaceElem = memo(() => {
         const isVisible = workspaceLayoutModel.getAIPanelVisible();
         getApi().setWaveAIOpen(isVisible);
     }, []);
+
+    // Recorded even when app:activityglow is off, so switching the setting on shows a meaningful
+    // picture immediately instead of an empty one. The dwell delay is what keeps a drive-by tab
+    // switch from registering as work.
+    useEffect(() => {
+        if (tabId === "" || ws?.oid == null) {
+            return;
+        }
+        const timer = setTimeout(() => {
+            recordActivity(makeORef("tab", tabId));
+            recordActivity(makeORef("workspace", ws.oid));
+        }, ActivityDwellMs);
+        return () => clearTimeout(timer);
+    }, [tabId, ws?.oid]);
 
     useEffect(() => {
         window.addEventListener("resize", workspaceLayoutModel.handleWindowResize);
