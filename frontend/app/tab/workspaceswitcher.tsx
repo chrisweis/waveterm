@@ -14,8 +14,7 @@ import {
 import { Popover, PopoverButton, PopoverContent } from "@/element/popover";
 import { fireAndForget, useAtomValueSafe } from "@/util/util";
 import clsx from "clsx";
-import { atom, PrimitiveAtom, useAtom, useAtomValue, useSetAtom } from "jotai";
-import { splitAtom } from "jotai/utils";
+import { atom, useAtom, useSetAtom } from "jotai";
 import { OverlayScrollbarsComponent, OverlayScrollbarsComponentRef } from "overlayscrollbars-react";
 import { CSSProperties, forwardRef, useCallback, useEffect } from "react";
 import WorkspaceSVG from "../asset/workspace.svg";
@@ -24,6 +23,7 @@ import { makeORef } from "../store/wos";
 import { waveEventSubscribeSingle } from "../store/wps";
 import { WorkspaceEditor } from "./workspaceeditor";
 import { WorkspaceIcon } from "./workspaceicon";
+import { useWorkspaceReorder } from "./workspaceorder";
 import "./workspaceswitcher.scss";
 
 export type WorkspaceSwitcherEnv = WaveEnvSubset<{
@@ -39,6 +39,7 @@ export type WorkspaceSwitcherEnv = WaveEnvSubset<{
         workspace: WaveEnv["services"]["workspace"];
     };
     wos: WaveEnv["wos"];
+    showContextMenu: WaveEnv["showContextMenu"];
 }>;
 
 type WorkspaceListEntry = {
@@ -48,14 +49,13 @@ type WorkspaceListEntry = {
 
 type WorkspaceList = WorkspaceListEntry[];
 const workspaceMapAtom = atom<WorkspaceList>([]);
-const workspaceSplitAtom = splitAtom(workspaceMapAtom);
 const editingWorkspaceAtom = atom<string>();
 const WorkspaceSwitcher = forwardRef<HTMLDivElement>((_, ref) => {
     const env = useWaveEnv<WorkspaceSwitcherEnv>();
-    const setWorkspaceList = useSetAtom(workspaceMapAtom);
+    const [workspaceEntries, setWorkspaceList] = useAtom(workspaceMapAtom);
     const activeWorkspace = useAtomValueSafe(env.atoms.workspace);
-    const workspaceList = useAtomValue(workspaceSplitAtom);
     const setEditingWorkspace = useSetAtom(editingWorkspaceAtom);
+    const reorder = useWorkspaceReorder(workspaceEntries, (entry) => entry.workspace.oid);
 
     // The popover content (and this scroll container) mounts fresh on each open. Reset the
     // viewport to the top so the pinned workspaces at the top of the list are shown first.
@@ -80,10 +80,13 @@ const WorkspaceSwitcher = forwardRef<HTMLDivElement>((_, ref) => {
         for (const entry of workspaceList) {
             // This just ensures that the atom exists for easier setting of the object
             globalStore.get(env.wos.getWaveObjectAtom(makeORef("workspace", entry.workspaceid)));
-            newList.push({
-                windowId: entry.windowid,
-                workspace: await env.services.workspace.GetWorkspace(entry.workspaceid),
-            });
+            const workspace = await env.services.workspace.GetWorkspace(entry.workspaceid);
+            // Ordering keys off workspace.oid, so an entry that failed to fetch has to be dropped
+            // rather than carried as a null and dereferenced later.
+            if (workspace == null) {
+                continue;
+            }
+            newList.push({ windowId: entry.windowid, workspace });
         }
         setWorkspaceList(newList);
     }, []);
@@ -103,6 +106,10 @@ const WorkspaceSwitcher = forwardRef<HTMLDivElement>((_, ref) => {
 
     const onDeleteWorkspace = useCallback((workspaceId: string) => {
         env.electron.deleteWorkspace(workspaceId);
+    }, []);
+
+    const updateEntry = useCallback((next: WorkspaceListEntry) => {
+        setWorkspaceList((prev) => prev.map((entry) => (entry.workspace.oid === next.workspace.oid ? next : entry)));
     }, []);
 
     const isActiveWorkspaceSaved = !!(activeWorkspace.name && activeWorkspace.icon);
@@ -150,8 +157,17 @@ const WorkspaceSwitcher = forwardRef<HTMLDivElement>((_, ref) => {
                     options={{ scrollbars: { autoHide: "leave" } }}
                 >
                     <ExpandableMenu noIndent singleOpen>
-                        {workspaceList.map((entry, i) => (
-                            <WorkspaceSwitcherItem key={i} entryAtom={entry} onDeleteWorkspace={onDeleteWorkspace} />
+                        {reorder.ordered.map((entry, index) => (
+                            <WorkspaceSwitcherItem
+                                key={entry.workspace.oid}
+                                entry={entry}
+                                updateEntry={updateEntry}
+                                isDragging={reorder.dragId === entry.workspace.oid}
+                                dropBefore={reorder.dropBefore(index)}
+                                dropAfter={reorder.dropAfter(index)}
+                                dragProps={reorder.dragItemProps(index)}
+                                onDeleteWorkspace={onDeleteWorkspace}
+                            />
                         ))}
                     </ExpandableMenu>
                 </OverlayScrollbarsComponent>
@@ -179,41 +195,56 @@ const WorkspaceSwitcher = forwardRef<HTMLDivElement>((_, ref) => {
 });
 
 const WorkspaceSwitcherItem = ({
-    entryAtom,
+    entry,
+    updateEntry,
+    isDragging,
+    dropBefore,
+    dropAfter,
+    dragProps,
     onDeleteWorkspace,
 }: {
-    entryAtom: PrimitiveAtom<WorkspaceListEntry>;
+    entry: WorkspaceListEntry;
+    updateEntry: (entry: WorkspaceListEntry) => void;
+    isDragging: boolean;
+    dropBefore: boolean;
+    dropAfter: boolean;
+    dragProps: React.HTMLAttributes<HTMLDivElement> & { draggable: boolean };
     onDeleteWorkspace: (workspaceId: string) => void;
 }) => {
     const env = useWaveEnv<WorkspaceSwitcherEnv>();
     const activeWorkspace = useAtomValueSafe(env.atoms.workspace);
-    const [workspaceEntry, setWorkspaceEntry] = useAtom(entryAtom);
     const [editingWorkspace, setEditingWorkspace] = useAtom(editingWorkspaceAtom);
 
-    const workspace = workspaceEntry.workspace;
+    const workspace = entry.workspace;
     const isCurrentWorkspace = activeWorkspace.oid === workspace.oid;
 
-    const setWorkspace = useCallback((newWorkspace: Workspace) => {
-        setWorkspaceEntry({ ...workspaceEntry, workspace: newWorkspace });
-        if (newWorkspace.name != "") {
-            fireAndForget(() =>
-                env.services.workspace.UpdateWorkspace(
-                    workspace.oid,
-                    newWorkspace.name,
-                    newWorkspace.icon,
-                    newWorkspace.color,
-                    false
-                )
-            );
-        }
-    }, []);
+    const setWorkspace = useCallback(
+        (newWorkspace: Workspace) => {
+            updateEntry({ ...entry, workspace: newWorkspace });
+            if (newWorkspace.name != "") {
+                fireAndForget(() =>
+                    env.services.workspace.UpdateWorkspace(
+                        workspace.oid,
+                        newWorkspace.name,
+                        newWorkspace.icon,
+                        newWorkspace.color,
+                        false
+                    )
+                );
+            }
+        },
+        [entry]
+    );
 
-    const setEmoji = useCallback((emoji: string) => {
-        setWorkspaceEntry({ ...workspaceEntry, workspace: { ...workspace, emoji } });
-        fireAndForget(() => env.services.workspace.SetWorkspaceEmoji(workspace.oid, emoji));
-    }, []);
+    const setEmoji = useCallback(
+        (emoji: string) => {
+            updateEntry({ ...entry, workspace: { ...workspace, emoji } });
+            fireAndForget(() => env.services.workspace.SetWorkspaceEmoji(workspace.oid, emoji));
+        },
+        [entry]
+    );
 
-    const isActive = !!workspaceEntry.windowId;
+    const isActive = !!entry.windowId;
     const editIconDecl: IconButtonDecl = {
         elemtype: "iconbutton",
         className: "edit",
@@ -250,6 +281,29 @@ const WorkspaceSwitcherItem = ({
 
     const isEditing = editingWorkspace === workspace.oid;
 
+    const onContextMenu = useCallback(
+        (e: React.MouseEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            env.showContextMenu(
+                [
+                    { label: "Edit Workspace...", click: () => setEditingWorkspace(workspace.oid) },
+                    {
+                        label: isPinned ? "Unpin Workspace" : "Pin Workspace",
+                        click: () =>
+                            fireAndForget(() => env.services.workspace.SetWorkspacePinned(workspace.oid, !isPinned)),
+                    },
+                    { type: "separator" },
+                    { label: "New Workspace", click: () => env.electron.createWorkspace() },
+                    { type: "separator" },
+                    { label: "Delete Workspace", click: () => onDeleteWorkspace(workspace.oid) },
+                ],
+                e
+            );
+        },
+        [workspace.oid, isPinned, onDeleteWorkspace]
+    );
+
     return (
         <ExpandableMenuItemGroup
             key={workspace.oid}
@@ -264,13 +318,17 @@ const WorkspaceSwitcherItem = ({
                 }}
             >
                 <div
-                    className="menu-group-title-wrapper"
+                    className={clsx("menu-group-title-wrapper", { dragging: isDragging })}
                     style={
                         {
                             "--workspace-color": workspace.color,
                         } as CSSProperties
                     }
+                    onContextMenu={onContextMenu}
+                    {...dragProps}
                 >
+                    {dropBefore && <div className="drop-indicator before" />}
+                    {dropAfter && <div className="drop-indicator after" />}
                     <ExpandableMenuItemLeftElement>
                         <WorkspaceIcon
                             className="left-icon"

@@ -16,4 +16,5 @@ export type WorkspaceSidebarEnv = WaveEnvSubset<{
         workspace: WaveEnv["services"]["workspace"];
     };
     wos: WaveEnv["wos"];
+    showContextMenu: WaveEnv["showContextMenu"];
 }>;

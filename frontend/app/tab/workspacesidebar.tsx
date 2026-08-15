@@ -12,6 +12,7 @@ import { memo, useCallback, useEffect, useState } from "react";
 import { waveEventSubscribeSingle } from "../store/wps";
 import { WorkspaceEditor } from "./workspaceeditor";
 import { WorkspaceIcon } from "./workspaceicon";
+import { useWorkspaceReorder } from "./workspaceorder";
 import { WorkspaceSidebarModel } from "./workspacesidebar-model";
 import "./workspacesidebar.scss";
 import { WorkspaceSidebarEnv } from "./workspacesidebarenv";
@@ -25,17 +26,32 @@ interface WorkspaceSidebarItemProps {
     entry: SidebarEntry;
     compact: boolean;
     isCurrent: boolean;
+    isDragging: boolean;
+    dropBefore: boolean;
+    dropAfter: boolean;
+    dragProps: React.HTMLAttributes<HTMLDivElement> & { draggable: boolean };
     onSelect: (workspaceId: string) => void;
     onDeleteWorkspace: (workspaceId: string) => void;
 }
 
 const WorkspaceSidebarItem = memo(
-    ({ entry, compact, isCurrent, onSelect, onDeleteWorkspace }: WorkspaceSidebarItemProps) => {
+    ({
+        entry,
+        compact,
+        isCurrent,
+        isDragging,
+        dropBefore,
+        dropAfter,
+        dragProps,
+        onSelect,
+        onDeleteWorkspace,
+    }: WorkspaceSidebarItemProps) => {
         const env = useWaveEnv<WorkspaceSidebarEnv>();
         const [liveWorkspace] = env.wos.useWaveObjectValue<Workspace>(makeORef("workspace", entry.workspaceId));
         // Local echo while the editor is open: every keystroke fires an RPC, and waiting for the
         // object to round-trip back through the store makes the input stutter.
         const [draft, setDraft] = useState<Workspace>(null);
+        const [editing, setEditing] = useState(false);
 
         const applyEdit = useCallback((next: Workspace) => {
             setDraft(next);
@@ -57,6 +73,32 @@ const WorkspaceSidebarItem = memo(
         }, []);
 
         const workspace = draft ?? liveWorkspace;
+
+        const onContextMenu = useCallback(
+            (e: React.MouseEvent) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (workspace == null) {
+                    return;
+                }
+                env.showContextMenu(
+                    [
+                        { label: "Edit Workspace...", click: () => setEditing(true) },
+                        {
+                            label: workspace.pinned ? "Unpin Workspace" : "Pin Workspace",
+                            click: () => togglePinned(workspace),
+                        },
+                        { type: "separator" },
+                        { label: "New Workspace", click: () => env.electron.createWorkspace() },
+                        { type: "separator" },
+                        { label: "Delete Workspace", click: () => onDeleteWorkspace(workspace.oid) },
+                    ],
+                    e
+                );
+            },
+            [workspace, onDeleteWorkspace]
+        );
+
         if (workspace == null) {
             return null;
         }
@@ -64,20 +106,23 @@ const WorkspaceSidebarItem = memo(
         const isOpen = !!entry.windowId;
         const isPinned = !!workspace.pinned;
 
-        const editButton = (
-            <Popover placement="right-start" onDismiss={() => setDraft(null)}>
-                <PopoverButton
-                    as="div"
-                    className={cn(
-                        // "ghost grey" is load-bearing: Button falls back to a solid green pill
-                        // when the className carries no category/color class.
-                        "workspace-sidebar-edit-btn ghost grey",
-                        "cursor-pointer rounded text-[10px] opacity-0 transition-opacity group-hover:opacity-100",
-                        compact ? "absolute right-0 top-0 h-3.5 w-3.5 bg-hoverbg" : "h-4 w-4"
-                    )}
-                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                >
-                    <i className="fa fa-solid fa-pencil" />
+        // The editor is opened only from the context menu, so the popover's anchor carries no
+        // pointer events of its own -- it exists purely to give floating-ui something to position
+        // against, and must never swallow the click that switches workspaces.
+        const editor = (
+            <Popover
+                className="workspace-sidebar-editor-mount"
+                placement="right-start"
+                open={editing}
+                onOpenChange={(open) => {
+                    setEditing(open);
+                    if (!open) {
+                        setDraft(null);
+                    }
+                }}
+            >
+                <PopoverButton className="workspace-sidebar-editor-anchor ghost grey" tabIndex={-1} aria-hidden={true}>
+                    {null}
                 </PopoverButton>
                 <PopoverContent className="workspace-sidebar-editor-popover">
                     <WorkspaceEditor
@@ -97,15 +142,30 @@ const WorkspaceSidebarItem = memo(
         );
 
         return (
-            <Tooltip content={workspace.name} placement="right" openDelay={0} hideOnClick>
+            <Tooltip
+                content={workspace.name}
+                placement="right"
+                openDelay={0}
+                hideOnClick
+                disable={isDragging || editing}
+            >
                 <div
                     className={cn(
                         "workspace-sidebar-item group relative mx-1.5 flex h-9 cursor-pointer items-center rounded-md transition-colors select-none",
                         compact ? "justify-center" : "gap-2.5 px-2",
-                        isCurrent ? "bg-hoverbg" : "hover:bg-hover"
+                        isCurrent ? "bg-hoverbg" : "hover:bg-hover",
+                        isDragging && "opacity-40"
                     )}
                     onClick={() => onSelect(workspace.oid)}
+                    onContextMenu={onContextMenu}
+                    {...dragProps}
                 >
+                    {dropBefore && (
+                        <div className="pointer-events-none absolute inset-x-0 -top-px h-0.5 rounded-full bg-accent" />
+                    )}
+                    {dropAfter && (
+                        <div className="pointer-events-none absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-accent" />
+                    )}
                     {isCurrent && (
                         <div className="pointer-events-none absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-accent" />
                     )}
@@ -134,17 +194,16 @@ const WorkspaceSidebarItem = memo(
                                         togglePinned(workspace);
                                     }}
                                 />
-                                {editButton}
                                 {isOpen && !isCurrent && (
                                     <i className="fa fa-solid fa-circle text-[5px] text-secondary/50" />
                                 )}
                             </div>
                         </>
                     )}
-                    {compact && editButton}
                     {compact && isOpen && !isCurrent && (
                         <div className="pointer-events-none absolute bottom-1 right-1 h-1 w-1 rounded-full bg-secondary/60" />
                     )}
+                    {editor}
                 </div>
             </Tooltip>
         );
@@ -265,6 +324,8 @@ export const WorkspaceSidebar = memo(() => {
         env.electron.deleteWorkspace(workspaceId);
     }, []);
 
+    const reorder = useWorkspaceReorder(entries, (entry) => entry.workspaceId);
+
     // The right edge carries a real resize handle in expanded mode only. Compact mode is a fixed
     // 48px icon strip, so it deliberately shows no edge affordance at all.
     return (
@@ -272,13 +333,20 @@ export const WorkspaceSidebar = memo(() => {
             className="relative flex h-full flex-col overflow-hidden"
             style={{ backdropFilter: "blur(20px)", background: "rgba(0, 0, 0, 0.35)" }}
         >
-            <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overflow-x-hidden pt-1.5">
-                {entries.map((entry) => (
+            <div
+                className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overflow-x-hidden pt-1.5"
+                {...reorder.dragContainerProps}
+            >
+                {reorder.ordered.map((entry, index) => (
                     <WorkspaceSidebarItem
                         key={entry.workspaceId}
                         entry={entry}
                         compact={compact}
                         isCurrent={activeWorkspace?.oid === entry.workspaceId}
+                        isDragging={reorder.dragId === entry.workspaceId}
+                        dropBefore={reorder.dropBefore(index)}
+                        dropAfter={reorder.dropAfter(index)}
+                        dragProps={reorder.dragItemProps(index)}
                         onSelect={onSelect}
                         onDeleteWorkspace={onDeleteWorkspace}
                     />

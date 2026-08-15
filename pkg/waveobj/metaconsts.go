@@ -103,6 +103,7 @@ const (
 	MetaKey_LayoutWidgetsVisible             = "layout:widgetsvisible"
 	MetaKey_LayoutWorkspaceSidebarCompact    = "layout:workspacesidebarcompact"
 	MetaKey_LayoutWorkspaceSidebarWidth      = "layout:workspacesidebarwidth"
+	MetaKey_LayoutWorkspaceOrder             = "layout:workspaceorder"
 
 	MetaKey_WaveAiPanelOpen                  = "waveai:panelopen"
 	MetaKey_WaveAiPanelWidth                 = "waveai:panelwidth"

@@ -1166,6 +1166,7 @@ declare global {
         "layout:widgetsvisible"?: boolean;
         "layout:workspacesidebarcompact"?: boolean;
         "layout:workspacesidebarwidth"?: number;
+        "layout:workspaceorder"?: string[];
         "waveai:panelopen"?: boolean;
         "waveai:panelwidth"?: number;
         "waveai:model"?: string;

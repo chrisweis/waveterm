@@ -1,15 +1,19 @@
-// .wave-button.ghost sets 8px padding on all sides, which is far too big for a 14px hover
-// affordance. Nested here so the selector outranks it without needing !important.
+// The editor popover is opened from the row's context menu, never by clicking. Its anchor only
+// needs to hand floating-ui the row's rectangle, so it covers the row invisibly and stays out of
+// hit testing entirely -- otherwise it would eat the click that switches workspaces.
 .workspace-sidebar-item {
-    .wave-button.workspace-sidebar-edit-btn {
-        padding: 0;
-        gap: 0;
-        justify-content: center;
-        color: var(--secondary-text-color);
+    .workspace-sidebar-editor-mount {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+    }
 
-        &:hover {
-            color: var(--main-text-color);
-        }
+    .wave-button.workspace-sidebar-editor-anchor {
+        width: 100%;
+        height: 100%;
+        padding: 0;
+        opacity: 0;
+        pointer-events: none;
     }
 }
 

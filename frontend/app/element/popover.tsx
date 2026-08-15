@@ -36,6 +36,10 @@ interface PopoverProps {
     offset?: OffsetOptions;
     onDismiss?: () => void;
     middleware?: Middleware[];
+    // Supply both to drive the popover from outside (e.g. opening it from a context menu). Omit
+    // both and it stays self-managed, opened by a click on its PopoverButton.
+    open?: boolean;
+    onOpenChange?: (open: boolean) => void;
 }
 
 const isPopoverButton = (
@@ -52,11 +56,25 @@ const isPopoverContent = (
 
 const Popover = memo(
     forwardRef<HTMLDivElement, PopoverProps>(
-        ({ children, className, placement = "bottom-start", offset = 3, onDismiss, middleware }, ref) => {
-            const [isOpen, setIsOpen] = useState(false);
+        (
+            {
+                children,
+                className,
+                placement = "bottom-start",
+                offset = 3,
+                onDismiss,
+                middleware,
+                open: controlledOpen,
+                onOpenChange,
+            },
+            ref
+        ) => {
+            const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+            const isOpen = controlledOpen ?? uncontrolledOpen;
 
             const handleOpenChange = (open: boolean) => {
-                setIsOpen(open);
+                setUncontrolledOpen(open);
+                onOpenChange?.(open);
                 if (!open && onDismiss) {
                     onDismiss();
                 }
