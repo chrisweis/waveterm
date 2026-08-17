@@ -169,8 +169,11 @@
             border: 1px solid var(--modal-border-color);
         }
 
+        // Tinted with the workspace's own colour and outlined, so selection reads as a hue while
+        // the recency glow stays a neutral luminance wash.
         &.is-current .menu-group-title-wrapper {
-            background-color: rgb(from var(--workspace-color) r g b / 0.1);
+            background-color: rgb(from var(--workspace-color) r g b / 0.18);
+            box-shadow: inset 0 0 0 1px rgb(from var(--workspace-color) r g b / 0.45);
         }
     }
 

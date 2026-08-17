@@ -320,7 +320,9 @@ const WorkspaceSwitcherItem = ({
                     onContextMenu={onContextMenu}
                     {...dragProps}
                 >
-                    {activityGlow != null && <div className="activity-glow" style={activityGlow} />}
+                    {!isCurrentWorkspace && activityGlow != null && (
+                        <div className="activity-glow" style={activityGlow} />
+                    )}
                     {dropBefore && <div className="drop-indicator before" />}
                     {dropAfter && <div className="drop-indicator after" />}
                     <ExpandableMenuItemLeftElement>

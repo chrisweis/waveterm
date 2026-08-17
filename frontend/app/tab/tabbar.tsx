@@ -22,6 +22,13 @@ import { WorkspaceSwitcher } from "./workspaceswitcher";
 
 const TabDefaultWidth = 130;
 const TabMinWidth = 100;
+// Autosize bounds. The floor is below TabMinWidth on purpose -- the whole point of autosize is that
+// a tab called "sh" need not reserve room for a name it doesn't have. There is no natural-width
+// ceiling: a lone tab with a long name is allowed to be wide, and the fitting pass below is what
+// reins tabs in once they have to compete for space.
+const TabAutoMinWidth = 70;
+// Room around the name for padding, badges and the close button.
+const TabAutoChrome = 46;
 const MacOSTrafficLightsWidth = 74;
 const MacOSTahoeTrafficLightsWidth = 80;
 
@@ -41,6 +48,52 @@ const OSOptions = {
         pointers: ["mouse", "touch", "pen"],
     },
 };
+
+// Expand every tab to its natural width when they all fit; otherwise cap them at the largest width
+// that does fit, so short names keep their size and only the long ones give up room. This is why the
+// answer is not simply "available / count": that shrinks a tab called "sh" just as hard as one with a
+// sentence in it. Exported for tests -- the previous sizing model shipped broken because its maths
+// was only ever exercised by eye.
+export function fitTabWidths(
+    naturals: number[],
+    available: number,
+    minWidth = TabAutoMinWidth,
+    protectedIndex = -1
+): number[] {
+    // A tab being renamed is exempt from shrinking: the whole point of expanding it is to show what
+    // is being typed, which competing for space would undo. It takes what it needs off the top and
+    // the rest share the remainder.
+    if (protectedIndex >= 0 && protectedIndex < naturals.length && naturals.length > 1) {
+        const reserved = Math.min(naturals[protectedIndex], available);
+        const rest = naturals.filter((_w, i) => i !== protectedIndex);
+        const fittedRest = fitTabWidths(rest, Math.max(0, available - reserved), minWidth);
+        const rtn: number[] = [];
+        let restIdx = 0;
+        for (let i = 0; i < naturals.length; i++) {
+            rtn.push(i === protectedIndex ? reserved : fittedRest[restIdx++]);
+        }
+        return rtn;
+    }
+    const total = naturals.reduce((acc, w) => acc + w, 0);
+    if (total <= available || naturals.length === 0) {
+        return naturals;
+    }
+    const ascending = [...naturals].sort((a, b) => a - b);
+    let consumed = 0;
+    let cap = Infinity;
+    for (let i = 0; i < ascending.length; i++) {
+        const remainingCount = ascending.length - i;
+        if (consumed + ascending[i] * remainingCount >= available) {
+            cap = (available - consumed) / remainingCount;
+            break;
+        }
+        consumed += ascending[i];
+    }
+    if (!isFinite(cap)) {
+        return naturals;
+    }
+    return naturals.map((w) => Math.max(minWidth, Math.min(w, cap)));
+}
 
 interface TabBarProps {
     workspace: Workspace;
@@ -127,6 +180,13 @@ const TabBar = memo(({ workspace, noTabs }: TabBarProps) => {
     const waveAIButtonRef = useRef<HTMLDivElement>(null);
     const appMenuButtonRef = useRef<HTMLDivElement>(null);
     const tabWidthRef = useRef<number>(TabDefaultWidth);
+    const measureCtxRef = useRef<CanvasRenderingContext2D>(null);
+    if (measureCtxRef.current == null && typeof document !== "undefined") {
+        measureCtxRef.current = document.createElement("canvas").getContext("2d");
+    }
+    // Keyed by tab id, not index: a drag reorders tabIds in place, so index-keyed widths would
+    // follow the slot rather than the tab and every tab after the drop would be laid out wrong.
+    const tabWidthsRef = useRef<Record<string, number>>({});
     const scrollableRef = useRef<boolean>(false);
     const prevAllLoadedRef = useRef<boolean>(false);
     const activeTabId = useAtomValue(env.atoms.staticTabId);
@@ -136,6 +196,8 @@ const TabBar = memo(({ workspace, noTabs }: TabBarProps) => {
     const confirmClose = useAtomValue(env.getSettingsKeyAtom("tab:confirmclose")) ?? false;
     const hideAiButton = useAtomValue(env.getSettingsKeyAtom("app:hideaibutton"));
     const workspaceSidebarEnabled = useAtomValue(env.getSettingsKeyAtom("app:workspacesidebar")) ?? false;
+    const autoSizeTabs = useAtomValue(env.getSettingsKeyAtom("tab:autosize")) ?? false;
+    const [tabsTotalWidth, setTabsTotalWidth] = useState(0);
     const appUpdateStatus = useAtomValue(env.atoms.updaterStatusAtom);
 
     let prevDelta: number;
@@ -158,6 +220,31 @@ const TabBar = memo(({ workspace, noTabs }: TabBarProps) => {
             setTabIds(newTabIdsArr);
         }
     }, [workspace, tabIds]);
+
+    const getWidthForId = (tabId: string) => tabWidthsRef.current[tabId] ?? tabWidthRef.current;
+
+    const getTotalWidth = (ids: string[]) => ids.reduce((acc, id) => acc + getWidthForId(id), 0);
+
+    const getOffsetForIndex = (ids: string[], index: number) => getTotalWidth(ids.slice(0, index));
+
+    // Measured on a canvas rather than by reflowing the real element. .name is absolutely positioned
+    // and stretched across the tab, so it has no intrinsic width to read; the alternative is widening
+    // it to max-content per tab per layout pass, which both thrashes layout and risks leaving a live
+    // element mid-edit in a mutated state.
+    const measureNaturalTabWidth = (tabEl: HTMLElement): number => {
+        const nameEl = tabEl.querySelector<HTMLElement>(".name");
+        if (nameEl == null) {
+            return TabDefaultWidth;
+        }
+        const ctx = measureCtxRef.current;
+        if (ctx == null) {
+            return TabDefaultWidth;
+        }
+        const style = getComputedStyle(nameEl);
+        ctx.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+        const textWidth = ctx.measureText(nameEl.textContent ?? "").width;
+        return Math.max(TabAutoMinWidth, textWidth + TabAutoChrome);
+    };
 
     const saveTabsPosition = useCallback(() => {
         const tabs = tabRefs.current;
@@ -212,27 +299,90 @@ const TabBar = memo(({ workspace, noTabs }: TabBarProps) => {
         // Apply min/max constraints
         idealTabWidth = Math.max(TabMinWidth, Math.min(idealTabWidth, TabDefaultWidth));
 
-        // Determine if the tab bar needs to be scrollable
-        const newScrollable = idealTabWidth * numberOfTabs > spaceForTabs;
-
-        // Apply the calculated width and position to all tabs
-        tabRefs.current.forEach((ref, index) => {
-            if (ref.current) {
-                if (animate) {
-                    ref.current.classList.add("animate");
-                } else {
-                    ref.current.classList.remove("animate");
-                }
-                ref.current.style.width = `${idealTabWidth}px`;
-                ref.current.style.transform = `translate3d(${index * idealTabWidth}px,0,0)`;
-                ref.current.style.opacity = "1";
-            }
-        });
-
-        // Update the state with the new tab width if it has changed
+        // Still needed under autosize: it is the fallback width for any tab not yet measured.
         if (idealTabWidth !== tabWidthRef.current) {
             tabWidthRef.current = idealTabWidth;
         }
+
+        // Resolved by tab id rather than array position. handleMouseMove splices tabIds in place
+        // during a drag while tabRefs keeps its original order, so tabRefs[i] and tabIds[i] can
+        // describe different tabs -- any relayout mid-drag would then write each tab's width and
+        // offset onto a different tab.
+        const elemById = new Map<string, HTMLDivElement>();
+        tabRefs.current.forEach((ref) => {
+            const refTabId = ref.current?.dataset.tabId;
+            if (refTabId != null) {
+                elemById.set(refTabId, ref.current);
+            }
+        });
+
+        // TabV marks the name it is editing with .focused. Reading it from the DOM avoids threading
+        // rename state up through every tab just so the bar can size one of them.
+        const editingIndex = tabIds.findIndex((id) => elemById.get(id)?.querySelector(".name.focused") != null);
+
+        const widths: Record<string, number> = {};
+        if (autoSizeTabs) {
+            const naturals = tabIds.map((id) => {
+                const el = elemById.get(id);
+                return el == null ? TabDefaultWidth : measureNaturalTabWidth(el);
+            });
+            const fitted = fitTabWidths(naturals, spaceForTabs, TabAutoMinWidth, editingIndex);
+            tabIds.forEach((id, index) => {
+                widths[id] = fitted[index];
+            });
+        } else if (editingIndex >= 0) {
+            // Applies with autosize off too. Typing into a tab you cannot read is the same problem
+            // either way, and the widening lasts only as long as the rename does.
+            const editingTabId = tabIds[editingIndex];
+            const editingEl = elemById.get(editingTabId);
+            if (editingEl != null) {
+                widths[editingTabId] = Math.min(
+                    Math.max(idealTabWidth, measureNaturalTabWidth(editingEl)),
+                    Math.max(idealTabWidth, spaceForTabs)
+                );
+            }
+        }
+        tabWidthsRef.current = widths;
+
+        const totalWidth = getTotalWidth(tabIds);
+
+        // Determine if the tab bar needs to be scrollable
+        const newScrollable = totalWidth > spaceForTabs;
+
+        // Apply the calculated width and position to all tabs
+        let layoutOffset = 0;
+        tabIds.forEach((id) => {
+            const el = elemById.get(id);
+            const width = getWidthForId(id);
+            if (el != null) {
+                if (animate) {
+                    el.classList.add("animate");
+                } else {
+                    el.classList.remove("animate");
+                }
+                el.style.width = `${width}px`;
+                el.style.transform = `translate3d(${layoutOffset}px,0,0)`;
+                el.style.opacity = "1";
+            }
+            layoutOffset += width;
+        });
+
+        // Second pass on purpose. .name is centred, and centred text with text-overflow clips at
+        // both ends, so a name wider than its tab renders as little more than the ellipsis -- it
+        // reads as a blank tab. Reading scrollWidth forces a reflow, so it has to happen after every
+        // width above is set, or each tab would trigger its own layout.
+        //
+        // A data attribute, not a class: React renders .name's className (it flips `focused` on
+        // every rename), so it would rewrite the attribute and silently drop a class added here.
+        // React does not manage attributes it never rendered, so this one survives.
+        tabRefs.current.forEach((ref) => {
+            const nameEl = ref.current?.querySelector<HTMLElement>(".name");
+            if (nameEl != null) {
+                nameEl.dataset.overflowing = String(nameEl.scrollWidth > nameEl.clientWidth + 1);
+            }
+        });
+
+        setTabsTotalWidth(totalWidth);
 
         // Update the state with the new scrollable state if it has changed
         if (newScrollable !== scrollableRef.current) {
@@ -257,7 +407,7 @@ const TabBar = memo(({ workspace, noTabs }: TabBarProps) => {
     const handleResizeTabs = useCallback(() => {
         setSizeAndPosition();
         saveTabsPositionDebounced();
-    }, [tabIds, newTabId, isFullScreen]);
+    }, [tabIds, newTabId, isFullScreen, autoSizeTabs, workspaceSidebarEnabled]);
 
     // update layout on reinit version
     const reinitVersion = useAtomValue(env.atoms.reinitVersion);
@@ -301,6 +451,10 @@ const TabBar = memo(({ workspace, noTabs }: TabBarProps) => {
         zoomFactor,
         showMenuBar,
         noTabs,
+        autoSizeTabs,
+        // Toggling the sidebar mounts/unmounts the switcher, which changes workspaceSwitcherWidth
+        // and therefore spaceForTabs.
+        workspaceSidebarEnabled,
     ]);
 
     const getDragDirection = (currentX: number) => {
@@ -317,22 +471,32 @@ const TabBar = memo(({ workspace, noTabs }: TabBarProps) => {
         return dragDirection;
     };
 
+    // Slot boundaries are derived from the live tabIds and current widths, never from
+    // dragStartPositions. tabIds is spliced in place as the drag progresses, so index i means "slot i
+    // right now", while dragStartPositions still describes the pre-drag layout. With uniform widths
+    // the two agreed by coincidence -- slot i was always at i * width -- which is why mixing them was
+    // invisible until tabs could differ in width, at which point the hit-test compares against the
+    // wrong edges and tabs churn into each other.
     const getNewTabIndex = (currentX: number, tabIndex: number, dragDirection: string) => {
         let newTabIndex = tabIndex;
-        const tabWidth = tabWidthRef.current;
+        const draggedWidth = getWidthForId(tabIds[tabIndex]);
+        let slotOffset = 0;
+        const slotStarts = tabIds.map((id) => {
+            const start = slotOffset;
+            slotOffset += getWidthForId(id);
+            return start;
+        });
         if (dragDirection === "+") {
-            // Dragging to the right
+            // Dragging to the right: the dragged tab's right edge passes a neighbour's midpoint.
             for (let i = tabIndex + 1; i < tabIds.length; i++) {
-                const otherTabStart = dragStartPositions[i];
-                if (currentX + tabWidth > otherTabStart + tabWidth / 2) {
+                if (currentX + draggedWidth > slotStarts[i] + getWidthForId(tabIds[i]) / 2) {
                     newTabIndex = i;
                 }
             }
         } else {
-            // Dragging to the left
+            // Dragging to the left: the dragged tab's left edge passes a neighbour's midpoint.
             for (let i = tabIndex - 1; i >= 0; i--) {
-                const otherTabEnd = dragStartPositions[i] + tabWidth;
-                if (currentX < otherTabEnd - tabWidth / 2) {
+                if (currentX < slotStarts[i] + getWidthForId(tabIds[i]) / 2) {
                     newTabIndex = i;
                 }
             }
@@ -356,7 +520,7 @@ const TabBar = memo(({ workspace, noTabs }: TabBarProps) => {
         const incrementDecrement = tabBarRectLeftOffset * 0.05;
         const dragDirection = getDragDirection(currentX);
         const scrollable = scrollableRef.current;
-        const tabWidth = tabWidthRef.current;
+        const draggedWidth = getWidthForId(tabId);
 
         // Scroll the tab bar if the dragged tab overflows the container bounds
         if (scrollable) {
@@ -393,7 +557,7 @@ const TabBar = memo(({ workspace, noTabs }: TabBarProps) => {
         // Constrain movement within the container bounds
         if (tabBarRef.current) {
             const numberOfTabs = tabIds.length;
-            const totalDefaultTabWidth = numberOfTabs * TabDefaultWidth;
+            const totalDefaultTabWidth = autoSizeTabs ? getTotalWidth(tabIds) : numberOfTabs * TabDefaultWidth;
             if (totalDefaultTabWidth < tabBarRectWidth) {
                 // Set to the total default tab width if there's vacant space
                 tabBarRectWidth = totalDefaultTabWidth;
@@ -403,7 +567,7 @@ const TabBar = memo(({ workspace, noTabs }: TabBarProps) => {
             }
 
             const minLeft = 0;
-            const maxRight = tabBarRectWidth - tabWidth;
+            const maxRight = tabBarRectWidth - draggedWidth;
 
             // Adjust currentX to stay within bounds
             currentX = Math.min(Math.max(currentX, minLeft), maxRight);
@@ -432,12 +596,14 @@ const TabBar = memo(({ workspace, noTabs }: TabBarProps) => {
             tabIds.splice(newTabIndex, 0, tabId);
 
             // Update visual positions of the tabs
-            tabIds.forEach((localTabId, index) => {
+            let reflowOffset = 0;
+            tabIds.forEach((localTabId) => {
                 const ref = tabRefs.current.find((ref) => ref.current.dataset.tabId === localTabId);
                 if (ref.current && localTabId !== tabId) {
-                    ref.current.style.transform = `translate3d(${index * tabWidth}px,0,0)`;
+                    ref.current.style.transform = `translate3d(${reflowOffset}px,0,0)`;
                     ref.current.classList.add("animate");
                 }
+                reflowOffset += getWidthForId(localTabId);
             });
 
             draggingTabDataRef.current.tabIndex = newTabIndex;
@@ -464,8 +630,7 @@ const TabBar = memo(({ workspace, noTabs }: TabBarProps) => {
 
         // Update the final position of the dragged tab
         const draggingTab = tabIds[tabIndex];
-        const tabWidth = tabWidthRef.current;
-        const finalLeftPosition = tabIndex * tabWidth;
+        const finalLeftPosition = getOffsetForIndex(tabIds, tabIndex);
         const ref = tabRefs.current.find((ref) => ref.current.dataset.tabId === draggingTab);
         if (ref.current) {
             ref.current.classList.add("animate");
@@ -494,7 +659,12 @@ const TabBar = memo(({ workspace, noTabs }: TabBarProps) => {
             if (event.button !== 0) return;
 
             const tabIndex = tabIds.indexOf(tabId);
-            const tabStartX = dragStartPositions[tabIndex]; // Starting X position of the tab
+            // Derived from the live widths rather than dragStartPositions. The first mousemove
+            // anchors the drag with initialOffsetX = clientX - tabStartX, so if tabStartX disagrees
+            // with where the tab is actually sitting the tab snaps to the stale position the instant
+            // you start dragging. Under uniform widths the two always agreed; under autosize they
+            // only agree until something re-lays-out.
+            const tabStartX = getOffsetForIndex(tabIds, tabIndex); // Starting X position of the tab
 
             console.log("handleDragStart", tabId, tabIndex, tabStartX);
             if (ref.current) {
@@ -513,7 +683,9 @@ const TabBar = memo(({ workspace, noTabs }: TabBarProps) => {
                 document.addEventListener("mouseup", handleMouseUp);
             }
         },
-        [tabIds, dragStartPositions]
+        // autoSizeTabs matters because the handleMouseMove registered here closes over it for the
+        // drag clamp; without it a stale closure clamps against the wrong total width.
+        [tabIds, dragStartPositions, autoSizeTabs]
     );
 
     const handleSelectTab = (tabId: string) => {
@@ -526,7 +698,7 @@ const TabBar = memo(({ workspace, noTabs }: TabBarProps) => {
         debounce(30, () => {
             if (scrollableRef.current) {
                 const { viewport } = osInstanceRef.current.elements();
-                viewport.scrollLeft = tabIds.length * tabWidthRef.current;
+                viewport.scrollLeft = tabsTotalWidth || tabIds.length * tabWidthRef.current;
             }
         }),
         [tabIds]
@@ -581,7 +753,7 @@ const TabBar = memo(({ workspace, noTabs }: TabBarProps) => {
         env.electron.showWorkspaceAppMenu(workspace.oid);
     }
 
-    const tabsWrapperWidth = tabIds.length * tabWidthRef.current;
+    const tabsWrapperWidth = tabsTotalWidth || tabIds.length * tabWidthRef.current;
     const showAppMenuButton = env.isWindows() || (!env.isMacOS() && !showMenuBar);
 
     // Calculate window drag left width based on platform and state
@@ -638,6 +810,13 @@ const TabBar = memo(({ workspace, noTabs }: TabBarProps) => {
                 <div
                     className="tabs-wrapper"
                     ref={tabsWrapperRef}
+                    onInput={() => setSizeAndPosition()}
+                    // Ends the rename-expand. Blur and Escape both set innerText programmatically,
+                    // which fires no input event, and the tab name round-trips through an RPC that
+                    // never re-renders TabBar -- so without this the widened tab stays widened (and
+                    // under autosize its neighbours stay squeezed) until an unrelated relayout.
+                    // Deferred a frame so the .focused class is gone before widths are recomputed.
+                    onBlur={() => requestAnimationFrame(() => setSizeAndPosition())}
                     style={{
                         width: noTabs ? 0 : tabsWrapperWidth,
                         ...(noTabs ? ({ WebkitAppRegion: "drag" } as React.CSSProperties) : {}),
@@ -659,7 +838,7 @@ const TabBar = memo(({ workspace, noTabs }: TabBarProps) => {
                                     onClose={(event) => handleCloseTab(event, tabId)}
                                     onLoaded={() => handleTabLoaded(tabId)}
                                     isDragging={draggingTab === tabId}
-                                    tabWidth={tabWidthRef.current}
+                                    tabWidth={getWidthForId(tabId)}
                                     isNew={tabId === newTabId}
                                     activityAlpha={activityAlphas[makeORef("tab", tabId)]}
                                 />

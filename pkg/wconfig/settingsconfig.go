@@ -71,6 +71,7 @@ type SettingsType struct {
 	AppTabBar                     string `json:"app:tabbar,omitempty" jsonschema:"enum=top,enum=left"`
 	AppWorkspaceSidebar              bool   `json:"app:workspacesidebar,omitempty"`
 	AppActivityGlow                  bool   `json:"app:activityglow,omitempty"`
+	TabAutoSize                      bool   `json:"tab:autosize,omitempty"`
 
 	FeatureWaveAppBuilder bool `json:"feature:waveappbuilder,omitempty"`
 

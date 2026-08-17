@@ -6,7 +6,6 @@ import * as WOS from "@/app/store/wos";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 import { getOrefMetaKeyAtom } from "@/store/global";
-import { fireAndForget } from "@/util/util";
 import * as jotai from "jotai";
 import { useAtomValue } from "jotai";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -34,17 +33,15 @@ export function applyWorkspaceOrder(ids: string[], order: string[]): string[] {
     return [...known, ...ids.filter((id) => !knownSet.has(id))];
 }
 
-function persistWorkspaceOrder(ids: string[]): void {
+function persistWorkspaceOrder(ids: string[]): Promise<void> {
     const clientId = ClientModel.getInstance().clientId;
     if (clientId == null) {
-        return;
+        return Promise.reject(new Error("no clientId"));
     }
-    fireAndForget(() =>
-        RpcApi.SetMetaCommand(TabRpcClient, {
-            oref: WOS.makeORef("client", clientId),
-            meta: { "layout:workspaceorder": ids },
-        })
-    );
+    return RpcApi.SetMetaCommand(TabRpcClient, {
+        oref: WOS.makeORef("client", clientId),
+        meta: { "layout:workspaceorder": ids },
+    });
 }
 
 type DragItemProps = {
@@ -118,7 +115,9 @@ export function useWorkspaceReorder<T>(items: T[], getId: (item: T) => string): 
             const [moved] = next.splice(sourceIndex, 1);
             next.splice(adjusted, 0, moved);
             setPendingOrder(next);
-            persistWorkspaceOrder(next);
+            // Drop the optimistic order if the write never lands, rather than showing an order that
+            // was never persisted until some unrelated change to client meta happens to clear it.
+            persistWorkspaceOrder(next).catch(() => setPendingOrder(null));
         },
         [ordered]
     );

@@ -44,11 +44,16 @@
             background-color 0.3s ease-in-out;
     }
 
+    // Selection is carried by hue, recency by luminance. They were previously both a translucent
+    // white wash, which made them indistinguishable -- and the recency glow ran to a higher alpha
+    // than this did, so a recently-used inactive tab outshone the active one. The inset box-shadow
+    // draws the hairline without changing the box model, so nothing shifts when a tab activates.
     &.active {
         .tab-inner {
             border-color: transparent;
             border-radius: 6px;
-            background: rgb(from var(--main-text-color) r g b / 0.1);
+            background: rgb(from var(--accent-color) r g b / 0.16);
+            box-shadow: inset 0 0 0 1px rgb(from var(--accent-color) r g b / 0.45);
         }
 
         .name {
@@ -71,6 +76,14 @@
         width: calc(100% - 10px);
         text-overflow: ellipsis;
         text-align: center;
+
+        // Centred text clips at both ends, so a name wider than its tab renders as little more
+        // than the ellipsis -- it reads as a blank tab. Set from the tab bar's layout pass, the only
+        // place that knows whether the text actually overflows. A data attribute rather than a
+        // class, because React renders this element's className and would drop a class added here.
+        &[data-overflowing="true"] {
+            text-align: left;
+        }
 
         &.focused {
             outline: none;

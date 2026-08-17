@@ -86,10 +86,9 @@ export function recordActivity(oref: string): void {
 
 export type ActivityEntry = { oref: string; score: number; ts: number };
 
-// Recency is measured on a *log* age scale, normalized against the spread of the set itself. That
-// combination is what makes this adaptive: log compresses orders of magnitude, so a minute vs an
-// hour vs three days all separate visibly, and normalizing against the observed spread stretches
-// the gradient to fit whatever window you actually worked in.
+// Recency is measured on an absolute log age curve (see RecencyFloorMs/RecencyCeilMs above), with
+// the decayed score applied only as a multiplier. Log scale is what makes it adaptive: a minute vs
+// an hour separates as visibly as a day vs a month.
 //
 // Decayed score alone cannot do this. Exponential decay preserves ratios, so items used close
 // together in absolute time -- the normal case inside one session -- come out at nearly identical

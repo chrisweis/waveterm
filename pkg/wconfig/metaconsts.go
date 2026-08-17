@@ -21,6 +21,8 @@ const (
 	ConfigKey_AppWorkspaceSidebar            = "app:workspacesidebar"
 	ConfigKey_AppActivityGlow                = "app:activityglow"
 
+	ConfigKey_TabAutoSize                    = "tab:autosize"
+
 	ConfigKey_FeatureWaveAppBuilder          = "feature:waveappbuilder"
 
 	ConfigKey_AiClear                        = "ai:*"

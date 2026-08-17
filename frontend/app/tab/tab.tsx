@@ -18,6 +18,11 @@ import "./tab.scss";
 import { TabBadges } from "./tabbadges";
 import { buildTabContextMenu } from "./tabcontextmenu";
 
+// Caps both the displayed name and what can be typed into the rename box. Long names still
+// ellipsize inside a fixed-width tab; with tab:autosize on they widen the tab instead, so this
+// doubles as the ceiling on how wide one tab can get.
+const MaxTabNameLength = 48;
+
 export type TabEnv = WaveEnvSubset<{
     rpc: {
         ActivityCommand: WaveEnv["rpc"]["ActivityCommand"];
@@ -72,7 +77,6 @@ const TabV = forwardRef<HTMLDivElement, TabVProps>((props, ref) => {
         onRename,
         renameRef,
     } = props;
-    const MaxTabNameLength = 14;
     const truncateTabName = (name: string) => [...(name ?? "")].slice(0, MaxTabNameLength).join("");
     const displayName = truncateTabName(tabName);
     const [originalName, setOriginalName] = useState(displayName);
@@ -160,7 +164,10 @@ const TabV = forwardRef<HTMLDivElement, TabVProps>((props, ref) => {
             editableRef.current.blur();
             event.preventDefault();
             event.stopPropagation();
-        } else if (curLen >= 14 && !["Backspace", "Delete", "ArrowLeft", "ArrowRight"].includes(event.key)) {
+        } else if (
+            curLen >= MaxTabNameLength &&
+            !["Backspace", "Delete", "ArrowLeft", "ArrowRight"].includes(event.key)
+        ) {
             const selection = window.getSelection();
             if (!selection || selection.isCollapsed) {
                 event.preventDefault();
@@ -198,7 +205,9 @@ const TabV = forwardRef<HTMLDivElement, TabVProps>((props, ref) => {
         >
             {showDivider && <div className="tab-divider" />}
             <div className="tab-inner">
-                {activityGlow != null && <div className="activity-glow" style={activityGlow} />}
+                {/* Never on the active tab: it is already the most salient thing in the bar, and a
+                    second wash on top only muddies the selection it is sitting next to. */}
+                {!active && activityGlow != null && <div className="activity-glow" style={activityGlow} />}
                 <div
                     ref={editableRef}
                     className={clsx("name", { focused: isEditable })}

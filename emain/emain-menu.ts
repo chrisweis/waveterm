@@ -206,7 +206,8 @@ function makeViewMenu(
     isBuilderWindowFocused: boolean,
     fullscreenOnLaunch: boolean,
     workspaceSidebar: boolean,
-    activityGlow: boolean
+    activityGlow: boolean,
+    autoSizeTabs: boolean
 ): Electron.MenuItemConstructorOptions[] {
     const devToolsAccel = unamePlatform === "darwin" ? "Option+Command+I" : "Alt+Shift+I";
     return [
@@ -346,6 +347,14 @@ function makeViewMenu(
                 RpcApi.SetConfigCommand(ElectronWshClient, { "app:activityglow": !activityGlow });
             },
         },
+        {
+            label: "Size Tabs To Their Names",
+            type: "checkbox",
+            checked: autoSizeTabs,
+            click: () => {
+                RpcApi.SetConfigCommand(ElectronWshClient, { "tab:autosize": !autoSizeTabs });
+            },
+        },
     ];
 }
 
@@ -358,12 +367,14 @@ async function makeFullAppMenu(callbacks: AppMenuCallbacks, workspaceOrBuilderId
     let fullscreenOnLaunch = false;
     let workspaceSidebar = false;
     let activityGlow = false;
+    let autoSizeTabs = false;
     let fullConfig: FullConfigType = null;
     try {
         fullConfig = await RpcApi.GetFullConfigCommand(ElectronWshClient);
         fullscreenOnLaunch = fullConfig?.settings["window:fullscreenonlaunch"];
         workspaceSidebar = fullConfig?.settings["app:workspacesidebar"] ?? false;
         activityGlow = fullConfig?.settings["app:activityglow"] ?? false;
+        autoSizeTabs = fullConfig?.settings["tab:autosize"] ?? false;
     } catch (e) {
         console.error("Error fetching config:", e);
     }
@@ -375,7 +386,8 @@ async function makeFullAppMenu(callbacks: AppMenuCallbacks, workspaceOrBuilderId
         isBuilderWindowFocused,
         fullscreenOnLaunch,
         workspaceSidebar,
-        activityGlow
+        activityGlow,
+        autoSizeTabs
     );
     let workspaceMenu: Electron.MenuItemConstructorOptions[] = null;
     try {

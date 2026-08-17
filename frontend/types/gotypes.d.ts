@@ -1394,6 +1394,7 @@ declare global {
         "app:tabbar"?: string;
         "app:workspacesidebar"?: boolean;
         "app:activityglow"?: boolean;
+        "tab:autosize"?: boolean;
         "feature:waveappbuilder"?: boolean;
         "ai:*"?: boolean;
         "ai:preset"?: string;

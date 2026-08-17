@@ -173,11 +173,11 @@ export function VTab({
                 isDragging && "opacity-50"
             )}
         >
-            {activityGlow != null && (
+            {!active && activityGlow != null && (
                 <div className="pointer-events-none absolute inset-x-1 inset-y-[4px] rounded-sm" style={activityGlow} />
             )}
             {active && (
-                <div className="pointer-events-none absolute inset-x-1 inset-y-[4px] rounded-sm bg-foreground/10" />
+                <div className="pointer-events-none absolute inset-x-1 inset-y-[4px] rounded-sm border border-accent/40 bg-accent/15" />
             )}
             {!active && !isReordering && (
                 <div className="pointer-events-none absolute inset-x-1 inset-y-[4px] rounded-sm bg-transparent transition-colors group-hover:bg-foreground/10" />

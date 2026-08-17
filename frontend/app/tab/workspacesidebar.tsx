@@ -6,7 +6,7 @@ import { Tooltip } from "@/app/element/tooltip";
 import { globalStore } from "@/app/store/jotaiStore";
 import { makeORef } from "@/app/store/wos";
 import { useWaveEnv } from "@/app/waveenv/waveenv";
-import { cn, fireAndForget, useAtomValueSafe } from "@/util/util";
+import { cn, fireAndForget, isBlank, useAtomValueSafe } from "@/util/util";
 import { useAtomValue } from "jotai";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { waveEventSubscribeSingle } from "../store/wps";
@@ -101,6 +101,15 @@ const WorkspaceSidebarItem = memo(
         const isOpen = !!entry.windowId;
         const activityGlow = activityGlowStyle(activityAlpha);
 
+        // The current row is tinted with the workspace's own colour, so selection reads as a hue
+        // while the recency glow stays a neutral luminance wash -- two channels that cannot be
+        // mistaken for each other. Falls back to the accent for a workspace with no colour set.
+        const selectionColor = isBlank(workspace.color) ? "var(--accent-color)" : workspace.color;
+        const currentStyle: React.CSSProperties = {
+            backgroundColor: `rgb(from ${selectionColor} r g b / 0.18)`,
+            boxShadow: `inset 0 0 0 1px rgb(from ${selectionColor} r g b / 0.45)`,
+        };
+
         // The editor is opened only from the context menu, so the popover's anchor carries no
         // pointer events of its own -- it exists purely to give floating-ui something to position
         // against, and must never swallow the click that switches workspaces.
@@ -146,14 +155,15 @@ const WorkspaceSidebarItem = memo(
                     className={cn(
                         "workspace-sidebar-item group relative mx-1.5 flex h-9 cursor-pointer items-center rounded-md transition-colors select-none",
                         compact ? "justify-center" : "gap-2.5 px-2",
-                        isCurrent ? "bg-hoverbg" : "hover:bg-hover",
+                        !isCurrent && "hover:bg-hover",
                         isDragging && "opacity-40"
                     )}
+                    style={isCurrent ? currentStyle : undefined}
                     onClick={() => onSelect(workspace.oid)}
                     onContextMenu={onContextMenu}
                     {...dragProps}
                 >
-                    {activityGlow != null && (
+                    {!isCurrent && activityGlow != null && (
                         <div className="pointer-events-none absolute inset-0 rounded-md" style={activityGlow} />
                     )}
                     {dropBefore && (
@@ -163,7 +173,10 @@ const WorkspaceSidebarItem = memo(
                         <div className="pointer-events-none absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-accent" />
                     )}
                     {isCurrent && (
-                        <div className="pointer-events-none absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-accent" />
+                        <div
+                            className="pointer-events-none absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full"
+                            style={{ backgroundColor: selectionColor }}
+                        />
                     )}
                     <WorkspaceIcon
                         icon={workspace.icon}
@@ -235,9 +248,13 @@ export const WorkspaceSidebarResizeHandle = memo(() => {
         const onMove = (ev: PointerEvent) => {
             sidebarModel.setDragWidth(startWidth + (ev.clientX - startX));
         };
+        // pointercancel matters as much as pointerup: the browser fires it when a gesture is taken
+        // over (touch scroll, window losing the pointer), and without it the app is left stuck on a
+        // col-resize cursor with text selection disabled and a live pointermove listener.
         const onUp = () => {
             window.removeEventListener("pointermove", onMove);
             window.removeEventListener("pointerup", onUp);
+            window.removeEventListener("pointercancel", onUp);
             document.body.style.cursor = "";
             document.body.style.userSelect = "";
             sidebarModel.persistWidth();
@@ -246,6 +263,7 @@ export const WorkspaceSidebarResizeHandle = memo(() => {
         document.body.style.userSelect = "none";
         window.addEventListener("pointermove", onMove);
         window.addEventListener("pointerup", onUp);
+        window.addEventListener("pointercancel", onUp);
     }, []);
 
     if (compact) {
@@ -305,6 +323,21 @@ export const WorkspaceSidebar = memo(() => {
         env.electron.deleteWorkspace(workspaceId);
     }, []);
 
+    // wcore.ListWorkspaces filters out workspaces with no name/icon/colour, and the sidebar replaces
+    // the switcher outright -- so without this a fresh window sits on an unnamed workspace that
+    // appears in no list and has no way to be named. The switcher carried the only "Save workspace"
+    // action; the sidebar has to carry its own.
+    const saveWorkspace = useCallback(() => {
+        if (activeWorkspace?.oid == null) {
+            return;
+        }
+        fireAndForget(async () => {
+            await env.services.workspace.UpdateWorkspace(activeWorkspace.oid, "", "", "", true);
+            await updateWorkspaceList();
+        });
+    }, [activeWorkspace?.oid]);
+
+    const isActiveWorkspaceSaved = !!(activeWorkspace?.name && activeWorkspace?.icon);
     const reorder = useWorkspaceReorder(entries, (entry) => entry.workspaceId);
     const workspaceOrefs = useMemo(
         () => reorder.ordered.map((entry) => makeORef("workspace", entry.workspaceId)),
@@ -340,6 +373,14 @@ export const WorkspaceSidebar = memo(() => {
                 ))}
             </div>
             <div className="flex shrink-0 flex-col gap-0.5 pb-1.5 pt-1">
+                {!isActiveWorkspaceSaved && (
+                    <SidebarButton
+                        icon="fa fa-solid fa-floppy-disk"
+                        label="Save workspace"
+                        compact={compact}
+                        onClick={saveWorkspace}
+                    />
+                )}
                 <SidebarButton
                     icon="fa fa-solid fa-plus"
                     label="New workspace"

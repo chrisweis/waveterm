@@ -155,7 +155,19 @@ const WorkspaceEditorComponent = ({
                 autoSelect
             />
             <ColorSelector selectedColor={color} colors={colors} onSelect={onColorChange} />
-            <IconSelector selectedIcon={isBlank(emoji) ? icon : null} icons={icons} onSelect={onIconChange} />
+            {/* Picking an icon also clears the emoji. An emoji overrides the icon everywhere, so
+                without this the grid is dead UI while one is set: nothing reads as selected, and
+                clicking changes the stored icon with no visible effect. */}
+            <IconSelector
+                selectedIcon={isBlank(emoji) ? icon : null}
+                icons={icons}
+                onSelect={(newIcon) => {
+                    onIconChange(newIcon);
+                    if (!isBlank(emoji)) {
+                        onEmojiChange("");
+                    }
+                }}
+            />
             <EmojiSelector emoji={emoji} onSelect={onEmojiChange} />
             <div className="delete-ws-btn-wrapper">
                 <Button className="ghost red text-[12px] bold" onClick={onDeleteWorkspace}>

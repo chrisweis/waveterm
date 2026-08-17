@@ -48,6 +48,7 @@ const WorkspaceElem = memo(() => {
     const workspaceLayoutModel = WorkspaceLayoutModel.getInstance();
     const tabId = useAtomValue(atoms.staticTabId);
     const ws = useAtomValue(atoms.workspace);
+    const reinitVersion = useAtomValue(atoms.reinitVersion);
     const tabBarPosition = useAtomValue(getSettingsKeyAtom("app:tabbar")) ?? "top";
     const showLeftTabBar = tabBarPosition === "left";
     const sidebarEnabled = useAtomValue(getSettingsKeyAtom("app:workspacesidebar")) ?? false;
@@ -106,6 +107,13 @@ const WorkspaceElem = memo(() => {
         getApi().setWaveAIOpen(isVisible);
     }, []);
 
+    // reinitVersion is load-bearing, not decoration. staticTabId is atom(initOpts.tabId) -- a
+    // constant for the life of this renderer, and every tab gets its own webview -- so re-activating
+    // an existing tab never changes it and never remounts. Keying only on tabId meant activity was
+    // recorded once when the webview was created and never again, which ranks tabs by view-creation
+    // order rather than by last use. reinitWave() bumps reinitVersion on every re-activation, and
+    // first creation is covered by the initial mount.
+    //
     // Recorded even when app:activityglow is off, so switching the setting on shows a meaningful
     // picture immediately instead of an empty one. The dwell delay is what keeps a drive-by tab
     // switch from registering as work.
@@ -118,7 +126,7 @@ const WorkspaceElem = memo(() => {
             recordActivity(makeORef("workspace", ws.oid));
         }, ActivityDwellMs);
         return () => clearTimeout(timer);
-    }, [tabId, ws?.oid]);
+    }, [tabId, ws?.oid, reinitVersion]);
 
     useEffect(() => {
         window.addEventListener("resize", workspaceLayoutModel.handleWindowResize);
