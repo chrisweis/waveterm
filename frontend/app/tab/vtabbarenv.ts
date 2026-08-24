@@ -7,6 +7,7 @@ export type VTabBarEnv = WaveEnvSubset<{
     electron: {
         createTab: WaveEnv["electron"]["createTab"];
         closeTab: WaveEnv["electron"]["closeTab"];
+        moveTab: WaveEnv["electron"]["moveTab"];
         setActiveTab: WaveEnv["electron"]["setActiveTab"];
         deleteWorkspace: WaveEnv["electron"]["deleteWorkspace"];
         createWorkspace: WaveEnv["electron"]["createWorkspace"];

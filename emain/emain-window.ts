@@ -136,6 +136,11 @@ type WindowActionQueueEntry =
           tabId: string;
       }
     | {
+          op: "movetab";
+          tabId: string;
+          targetWorkspaceId: string;
+      }
+    | {
           op: "switchworkspace";
           workspaceId: string;
       };
@@ -533,6 +538,10 @@ export class WaveBrowserWindow extends BaseWindow {
         await this._queueActionInternal({ op: "closetab", tabId });
     }
 
+    async queueMoveTab(tabId: string, targetWorkspaceId: string) {
+        await this._queueActionInternal({ op: "movetab", tabId, targetWorkspaceId });
+    }
+
     private async _queueActionInternal(entry: WindowActionQueueEntry) {
         if (this.actionQueue.length >= 2) {
             this.actionQueue[1] = entry;
@@ -593,6 +602,29 @@ export class WaveBrowserWindow extends BaseWindow {
                         if (rtn.closewindow) {
                             this.close();
                             return;
+                        }
+                        if (!rtn.newactivetabid) {
+                            return;
+                        }
+                        tabId = rtn.newactivetabid;
+                        break;
+                    }
+                    case "movetab": {
+                        const rtn = await WorkspaceService.MoveTab(
+                            this.workspaceId,
+                            entry.tabId,
+                            entry.targetWorkspaceId
+                        );
+                        if (rtn == null) {
+                            console.log("[error] moveTab: no return value", entry.tabId, this.waveWindowId);
+                            return;
+                        }
+                        // The tab's renderer was initialized against this window/workspace, so it is
+                        // destroyed here and the destination window builds a fresh one on activation.
+                        this.removeTabView(entry.tabId, true);
+                        const targetWindow = getWaveWindowByWorkspaceId(entry.targetWorkspaceId);
+                        if (targetWindow != null) {
+                            fireAndForget(() => targetWindow.setActiveTab(entry.tabId, true));
                         }
                         if (!rtn.newactivetabid) {
                             return;
@@ -784,6 +816,16 @@ ipcMain.handle("close-tab", async (event, workspaceId: string, tabId: string, co
         }
     }
     await ww.queueCloseTab(tabId);
+    return true;
+});
+
+ipcMain.handle("move-tab", async (_event, workspaceId: string, tabId: string, targetWorkspaceId: string) => {
+    const ww = getWaveWindowByWorkspaceId(workspaceId);
+    if (ww == null) {
+        console.log(`move-tab: no window found for workspace ws=${workspaceId} tab=${tabId}`);
+        return false;
+    }
+    await ww.queueMoveTab(tabId, targetWorkspaceId);
     return true;
 });
 

@@ -1230,6 +1230,11 @@ declare global {
         color: string;
     };
 
+    // workspaceservice.MoveTabRtnType
+    type MoveTabRtnType = {
+        newactivetabid?: string;
+    };
+
     // waveobj.ORef
     type ORef = string;
 

@@ -36,12 +36,31 @@ export function buildTabBarContextMenu(env: TabEnv): ContextMenuItem[] {
     return [{ label: "Tab Bar Position", type: "submenu", submenu: tabBarSubmenu }];
 }
 
-export function buildTabContextMenu(
+async function buildMoveToWorkspaceSubmenu(id: string, env: TabEnv): Promise<ContextMenuItem[]> {
+    const currentWorkspaceId = globalStore.get(env.atoms.workspace)?.oid;
+    const workspaceList = (await env.services.workspace.ListWorkspaces()) ?? [];
+    const others = workspaceList.filter((entry) => entry.workspaceid !== currentWorkspaceId);
+    // The sidebar/switcher pins every workspace object in each window, so the atoms are already
+    // populated and can be read synchronously here.
+    const submenu: ContextMenuItem[] = others
+        .map((entry) => globalStore.get(env.wos.getWaveObjectAtom<Workspace>(makeORef("workspace", entry.workspaceid))))
+        .filter((ws) => ws != null)
+        .map((ws) => ({
+            label: ws.emoji ? `${ws.emoji} ${ws.name}` : ws.name,
+            click: () => fireAndForget(() => env.electron.moveTab(currentWorkspaceId, id, ws.oid)),
+        }));
+    if (submenu.length === 0) {
+        submenu.push({ label: "No Other Workspaces", enabled: false });
+    }
+    return submenu;
+}
+
+export async function buildTabContextMenu(
     id: string,
     renameRef: React.RefObject<(() => void) | null>,
     onClose: (event: React.MouseEvent<HTMLButtonElement, MouseEvent> | null) => void,
     env: TabEnv
-): ContextMenuItem[] {
+): Promise<ContextMenuItem[]> {
     const menu: ContextMenuItem[] = [];
     menu.push(
         { label: "Rename Tab", click: () => renameRef.current?.() },
@@ -49,6 +68,10 @@ export function buildTabContextMenu(
             label: "Copy TabId",
             click: () => fireAndForget(() => navigator.clipboard.writeText(id)),
         },
+        { type: "separator" }
+    );
+    menu.push(
+        { label: "Move to Workspace", type: "submenu", submenu: await buildMoveToWorkspaceSubmenu(id, env) },
         { type: "separator" }
     );
     const tabORef = makeORef("tab", id);

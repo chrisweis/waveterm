@@ -24,6 +24,12 @@ import { buildTabContextMenu } from "./tabcontextmenu";
 const MaxTabNameLength = 48;
 
 export type TabEnv = WaveEnvSubset<{
+    electron: {
+        moveTab: WaveEnv["electron"]["moveTab"];
+    };
+    services: {
+        workspace: WaveEnv["services"]["workspace"];
+    };
     rpc: {
         ActivityCommand: WaveEnv["rpc"]["ActivityCommand"];
         SetConfigCommand: WaveEnv["rpc"]["SetConfigCommand"];
@@ -32,6 +38,7 @@ export type TabEnv = WaveEnvSubset<{
     };
     atoms: {
         fullConfigAtom: WaveEnv["atoms"]["fullConfigAtom"];
+        workspace: WaveEnv["atoms"]["workspace"];
     };
     wos: WaveEnv["wos"];
     getSettingsKeyAtom: WaveEnv["getSettingsKeyAtom"];
@@ -306,8 +313,10 @@ const TabInner = forwardRef<HTMLDivElement, TabProps>((props, ref) => {
     const handleContextMenu = useCallback(
         (e: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
             e.preventDefault();
-            const menu = buildTabContextMenu(id, renameRef, onClose, env);
-            env.showContextMenu(menu, e);
+            fireAndForget(async () => {
+                const menu = await buildTabContextMenu(id, renameRef, onClose, env);
+                env.showContextMenu(menu, e);
+            });
         },
         [id, onClose, env]
     );

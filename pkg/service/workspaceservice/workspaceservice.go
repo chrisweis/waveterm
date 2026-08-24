@@ -198,6 +198,28 @@ func (svc *WorkspaceService) CreateTab(workspaceId string, tabName string, activ
 	return tabId, updates, nil
 }
 
+type MoveTabRtnType struct {
+	NewActiveTabId string `json:"newactivetabid,omitempty"`
+}
+
+func (svc *WorkspaceService) MoveTab_Meta() tsgenmeta.MethodMeta {
+	return tsgenmeta.MethodMeta{
+		ArgNames:   []string{"ctx", "workspaceId", "tabId", "targetWorkspaceId"},
+		ReturnDesc: "MoveTabRtn",
+	}
+}
+
+// moves tabId out of workspaceId into targetWorkspaceId; returns the source workspace's new active tabid
+func (svc *WorkspaceService) MoveTab(ctx context.Context, workspaceId string, tabId string, targetWorkspaceId string) (*MoveTabRtnType, waveobj.UpdatesRtnType, error) {
+	ctx = waveobj.ContextWithUpdates(ctx)
+	newActiveTabId, err := wcore.MoveTab(ctx, workspaceId, tabId, targetWorkspaceId)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error moving tab: %w", err)
+	}
+	updates := sendWorkspaceUpdates(ctx, "WorkspaceService:MoveTab:SendUpdateEvents")
+	return &MoveTabRtnType{NewActiveTabId: newActiveTabId}, updates, nil
+}
+
 func (svc *WorkspaceService) SetActiveTab_Meta() tsgenmeta.MethodMeta {
 	return tsgenmeta.MethodMeta{
 		ArgNames: []string{"workspaceId", "tabId"},

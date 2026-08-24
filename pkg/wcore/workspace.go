@@ -350,6 +350,57 @@ func DeleteTab(ctx context.Context, workspaceId string, tabId string, recursive 
 	return newActiveTabId, nil
 }
 
+// Reparents a tab (and everything under it) from one workspace to another. Blocks, layout and
+// controllers are untouched -- only the workspace TabIds lists change -- so running terminals
+// survive the move. Returns the source workspace's new active tab id; if the moved tab was the
+// last one, a fresh tab is created so the source window never ends up empty.
+func MoveTab(ctx context.Context, srcWorkspaceId string, tabId string, dstWorkspaceId string) (string, error) {
+	if srcWorkspaceId == dstWorkspaceId {
+		return "", fmt.Errorf("tab %s is already in workspace %s", tabId, dstWorkspaceId)
+	}
+	srcWs, _ := wstore.DBGet[*waveobj.Workspace](ctx, srcWorkspaceId)
+	if srcWs == nil {
+		return "", fmt.Errorf("source workspace not found: %q", srcWorkspaceId)
+	}
+	dstWs, _ := wstore.DBGet[*waveobj.Workspace](ctx, dstWorkspaceId)
+	if dstWs == nil {
+		return "", fmt.Errorf("destination workspace not found: %q", dstWorkspaceId)
+	}
+	tabIdx := utilfn.FindStringInSlice(srcWs.TabIds, tabId)
+	if tabIdx == -1 {
+		return "", fmt.Errorf("tab %s not found in workspace %s", tabId, srcWorkspaceId)
+	}
+	if utilfn.FindStringInSlice(dstWs.TabIds, tabId) != -1 {
+		return "", fmt.Errorf("tab %s is already in workspace %s", tabId, dstWorkspaceId)
+	}
+	srcWs.TabIds = append(srcWs.TabIds[:tabIdx], srcWs.TabIds[tabIdx+1:]...)
+	newActiveTabId := srcWs.ActiveTabId
+	if srcWs.ActiveTabId == tabId {
+		if len(srcWs.TabIds) > 0 {
+			newActiveTabId = srcWs.TabIds[max(0, min(tabIdx-1, len(srcWs.TabIds)-1))]
+		} else {
+			newActiveTabId = ""
+		}
+	}
+	srcWs.ActiveTabId = newActiveTabId
+	dstWs.TabIds = append(dstWs.TabIds, tabId)
+	if dstWs.ActiveTabId == "" {
+		dstWs.ActiveTabId = tabId
+	}
+	wstore.DBUpdate(ctx, srcWs)
+	wstore.DBUpdate(ctx, dstWs)
+
+	if newActiveTabId == "" {
+		var err error
+		newActiveTabId, err = CreateTab(ctx, srcWorkspaceId, "", true, false)
+		if err != nil {
+			return "", fmt.Errorf("error creating replacement tab in workspace %s: %w", srcWorkspaceId, err)
+		}
+	}
+	log.Printf("moved tab %s from workspace %s to %s\n", tabId, srcWorkspaceId, dstWorkspaceId)
+	return newActiveTabId, nil
+}
+
 func SetActiveTab(ctx context.Context, workspaceId string, tabId string) error {
 	if tabId != "" && workspaceId != "" {
 		workspace, err := GetWorkspace(ctx, workspaceId)

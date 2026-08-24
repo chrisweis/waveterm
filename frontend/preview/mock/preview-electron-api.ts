@@ -41,6 +41,7 @@ const previewElectronApi: ElectronApi = {
     setActiveTab: (_tabId: string) => {},
     createTab: () => {},
     closeTab: (_workspaceId: string, _tabId: string, _confirmClose: boolean) => Promise.resolve(false),
+    moveTab: (_workspaceId: string, _tabId: string, _targetWorkspaceId: string) => Promise.resolve(false),
     setWindowInitStatus: (_status: "ready" | "wave-ready") => {},
     onWaveInit: (_callback: (initOpts: WaveInitOpts) => void) => {},
     onBuilderInit: (_callback: (initOpts: BuilderInitOpts) => void) => {},
