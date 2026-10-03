@@ -31,6 +31,10 @@ const TabAutoMinWidth = 70;
 const TabAutoChrome = 46;
 const MacOSTrafficLightsWidth = 74;
 const MacOSTahoeTrafficLightsWidth = 80;
+// Reserved draggable gap between the add-tab button and the window buttons. Without it, a full
+// tab bar leaves no surface to drag the window by (the only drag regions left are a ~5px sliver
+// above the tabs and the window-button margins).
+const WindowGrabZoneWidth = 50;
 
 const OSOptions = {
     overflow: {
@@ -288,7 +292,8 @@ const TabBar = memo(({ workspace, noTabs }: TabBarProps) => {
             addBtnWidth +
             appMenuButtonWidth +
             workspaceSwitcherWidth +
-            waveAIButtonWidth;
+            waveAIButtonWidth +
+            WindowGrabZoneWidth;
         const spaceForTabs = tabbarWrapperWidth - nonTabElementsWidth;
 
         const numberOfTabs = tabIds.length;
@@ -855,7 +860,10 @@ const TabBar = memo(({ workspace, noTabs }: TabBarProps) => {
             >
                 <i className="fa fa-solid fa-plus" />
             </button>
-            <div className="flex-1" />
+            <div
+                className="flex-1 z-window-drag"
+                style={{ minWidth: WindowGrabZoneWidth, WebkitAppRegion: "drag" } as any}
+            />
             <div ref={rightContainerRef} className="flex flex-row gap-1 items-end">
                 <UpdateStatusBanner />
                 <div
