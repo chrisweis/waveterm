@@ -28,6 +28,7 @@
     "window:fullscreenonlaunch": false,
     "window:magnifiedblockblursecondarypx": 2,
     "window:confirmclose": true,
+    "tab:confirmclose": true,
     "window:savelastwindow": true,
     "telemetry:enabled": true,
     "term:bellsound": false,

@@ -865,12 +865,17 @@ ipcMain.on("delete-workspace", (event, workspaceId) => {
 
         const _workspaceHasWindow = !!workspaceList.find((wse) => wse.workspaceid === workspaceId)?.windowid;
 
-        const choice = dialog.showMessageBoxSync(this, {
+        // Parent to the sender window: `this` is undefined at module scope, which left the dialog
+        // unparented and free to open behind the Wave window.
+        const dialogOpts: Electron.MessageBoxSyncOptions = {
             type: "question",
+            defaultId: 0,
+            cancelId: 0,
             buttons: ["Cancel", "Delete Workspace"],
             title: "Confirm",
             message: `Deleting workspace will also delete its contents.\n\nContinue?`,
-        });
+        };
+        const choice = ww ? dialog.showMessageBoxSync(ww, dialogOpts) : dialog.showMessageBoxSync(dialogOpts);
         if (choice === 0) {
             console.log("user cancelled workspace delete", workspaceId, ww?.waveWindowId);
             return;
