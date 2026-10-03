@@ -241,6 +241,18 @@
             "modtime"
           ]
         },
+        "preview:hiddencolumns": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "preview:columnorder": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "tab:preset": {
           "type": "string"
         },

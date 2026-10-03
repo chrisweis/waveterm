@@ -136,8 +136,10 @@ type SettingsType struct {
 	MarkdownFontSize      float64 `json:"markdown:fontsize,omitempty"`
 	MarkdownFixedFontSize float64 `json:"markdown:fixedfontsize,omitempty"`
 
-	PreviewShowHiddenFiles *bool  `json:"preview:showhiddenfiles,omitempty"`
-	PreviewDefaultSort     string `json:"preview:defaultsort,omitempty" jsonschema:"enum=name,enum=modtime"`
+	PreviewShowHiddenFiles *bool    `json:"preview:showhiddenfiles,omitempty"`
+	PreviewDefaultSort     string   `json:"preview:defaultsort,omitempty" jsonschema:"enum=name,enum=modtime"`
+	PreviewHiddenColumns   []string `json:"preview:hiddencolumns,omitempty"`
+	PreviewColumnOrder     []string `json:"preview:columnorder,omitempty"`
 
 	TabPreset       string `json:"tab:preset,omitempty"`
 	TabConfirmClose bool   `json:"tab:confirmclose,omitempty"`
@@ -845,6 +847,31 @@ func convertJsonNumber(num json.Number, ctype reflect.Type) (interface{}, error)
 	return nil, fmt.Errorf("cannot convert number to %s", ctype)
 }
 
+// JSON-RPC decodes arrays as []interface{}, which never matches a concrete slice type like
+// []string, so array-valued settings need an element-wise conversion.
+func convertJsonArray(val interface{}, ctype reflect.Type) (interface{}, error) {
+	arr, ok := val.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("value is not an array: %T", val)
+	}
+	elemType := ctype.Elem()
+	rtn := reflect.MakeSlice(ctype, 0, len(arr))
+	for _, elem := range arr {
+		if num, isNum := elem.(json.Number); isNum {
+			convertedElem, err := convertJsonNumber(num, elemType)
+			if err != nil {
+				return nil, err
+			}
+			elem = convertedElem
+		}
+		if elem == nil || !reflect.TypeOf(elem).AssignableTo(elemType) {
+			return nil, fmt.Errorf("invalid array element type %T (expected %s)", elem, elemType)
+		}
+		rtn = reflect.Append(rtn, reflect.ValueOf(elem))
+	}
+	return rtn.Interface(), nil
+}
+
 func SetBaseConfigValue(toMerge waveobj.MetaMapType) error {
 	m, cerrs := ReadWaveHomeConfigFile(SettingsFile)
 	if len(cerrs) > 0 {
@@ -873,6 +900,12 @@ func SetBaseConfigValue(toMerge waveobj.MetaMapType) error {
 			if rtype != ctype {
 				if ctype == reflect.PointerTo(rtype) {
 					m[configKey] = &val
+				} else if ctype.Kind() == reflect.Slice {
+					convertedVal, err := convertJsonArray(val, ctype)
+					if err != nil {
+						return fmt.Errorf("cannot convert %s: %v", configKey, err)
+					}
+					val = convertedVal
 				} else {
 					return fmt.Errorf("invalid value type for %s: %T", configKey, val)
 				}

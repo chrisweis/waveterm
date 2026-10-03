@@ -1457,6 +1457,8 @@ declare global {
         "markdown:fixedfontsize"?: number;
         "preview:showhiddenfiles"?: boolean;
         "preview:defaultsort"?: string;
+        "preview:hiddencolumns"?: string[];
+        "preview:columnorder"?: string[];
         "tab:preset"?: string;
         "tab:confirmclose"?: boolean;
         "tab:background"?: string;

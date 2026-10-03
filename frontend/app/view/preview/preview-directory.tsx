@@ -13,6 +13,7 @@ import { formatRemoteUri } from "@/util/waveutil";
 import { offset, useDismiss, useFloating, useInteractions } from "@floating-ui/react";
 import {
     Header,
+    HeaderGroup,
     Row,
     RowData,
     Table,
@@ -48,18 +49,64 @@ import type { PreviewEnv } from "./previewenv";
 
 const PageJumpSize = 20;
 
+const ColumnDragType = "DIR_TABLE_COL";
+// The logo and name columns are pinned: name is the one column that always makes sense, and the
+// icon reads as part of it.
+const AdjustableColumns: { id: string; label: string }[] = [
+    { id: "modestr", label: "Perm" },
+    { id: "modtime", label: "Last Modified" },
+    { id: "size", label: "Size" },
+    { id: "mimetype", label: "Type" },
+];
+const EmptyColumnList: string[] = [];
+
 interface DirectoryTableHeaderCellProps {
     header: Header<FileInfo, unknown>;
+    canReorder: boolean;
+    onMoveColumn: (dragId: string, dropId: string) => void;
 }
 
-function DirectoryTableHeaderCell({ header }: DirectoryTableHeaderCellProps) {
+function DirectoryTableHeaderCell({ header, canReorder, onMoveColumn }: DirectoryTableHeaderCellProps) {
+    const [{ isDragging }, drag] = useDrag(
+        () => ({
+            type: ColumnDragType,
+            canDrag: canReorder,
+            item: () => ({ colId: header.column.id }),
+            collect: (monitor) => ({ isDragging: monitor.isDragging() }),
+        }),
+        [canReorder, header.column.id]
+    );
+    const [{ isOver, canDrop }, drop] = useDrop(
+        () => ({
+            accept: ColumnDragType,
+            canDrop: (item: { colId: string }) => canReorder && item.colId !== header.column.id,
+            drop: (item: { colId: string }) => onMoveColumn(item.colId, header.column.id),
+            collect: (monitor) => ({ isOver: monitor.isOver(), canDrop: monitor.canDrop() }),
+        }),
+        [canReorder, header.column.id, onMoveColumn]
+    );
     return (
         <div
-            className="dir-table-head-cell"
+            ref={(node) => {
+                drop(node);
+            }}
+            className={clsx("dir-table-head-cell", {
+                "dir-table-head-cell-dragging": isDragging,
+                "dir-table-head-cell-drop-target": isOver && canDrop,
+            })}
             key={header.id}
             style={{ width: `calc(var(--header-${header.id}-size) * 1px)` }}
         >
-            <div className="dir-table-head-cell-content" onClick={() => header.column.toggleSorting()}>
+            {/* Only the label is the drag source. With the whole cell connected, the resize
+                handle sits inside a draggable element, and grabbing it starts a native
+                column-reorder drag that steals the mousemove events mid-resize. */}
+            <div
+                ref={(node) => {
+                    drag(node);
+                }}
+                className="dir-table-head-cell-content"
+                onClick={() => header.column.toggleSorting()}
+            >
                 {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                 {getSortIcon(header.column.getIsSorted())}
             </div>
@@ -70,6 +117,54 @@ function DirectoryTableHeaderCell({ header }: DirectoryTableHeaderCellProps) {
                     onTouchStart={header.getResizeHandler()}
                 />
             </div>
+        </div>
+    );
+}
+
+interface DirectoryTableHeaderRowProps {
+    headerGroup: HeaderGroup<FileInfo>;
+    onContextMenu: (e: React.MouseEvent) => void;
+    onMoveColumn: (dragId: string, dropId: string) => void;
+    onMoveColumnToEnd: (dragId: string) => void;
+}
+
+// The row is a drop target too so a column can be dropped on the empty space right of the last
+// header, which reads as "move to the end"; cell drops win via didDrop().
+function DirectoryTableHeaderRow({
+    headerGroup,
+    onContextMenu,
+    onMoveColumn,
+    onMoveColumnToEnd,
+}: DirectoryTableHeaderRowProps) {
+    const [{ isOverRow }, drop] = useDrop(
+        () => ({
+            accept: ColumnDragType,
+            drop: (item: { colId: string }, monitor) => {
+                if (monitor.didDrop()) {
+                    return;
+                }
+                onMoveColumnToEnd(item.colId);
+            },
+            collect: (monitor) => ({ isOverRow: monitor.isOver({ shallow: true }) }),
+        }),
+        [onMoveColumnToEnd]
+    );
+    return (
+        <div
+            ref={(node) => {
+                drop(node);
+            }}
+            className={clsx("dir-table-head-row", { "dir-table-head-row-drop-end": isOverRow })}
+            onContextMenu={onContextMenu}
+        >
+            {headerGroup.headers.map((header) => (
+                <DirectoryTableHeaderCell
+                    key={header.id}
+                    header={header}
+                    canReorder={AdjustableColumns.some((c) => c.id === header.column.id)}
+                    onMoveColumn={onMoveColumn}
+                />
+            ))}
         </div>
     );
 }
@@ -114,6 +209,8 @@ function DirectoryTable({
     const env = useWaveEnv<PreviewEnv>();
     const fullConfig = useAtomValue(env.atoms.fullConfigAtom);
     const defaultSort = useAtomValue(env.getSettingsKeyAtom("preview:defaultsort")) ?? "name";
+    const hiddenColumns = useAtomValue(env.getSettingsKeyAtom("preview:hiddencolumns")) ?? EmptyColumnList;
+    const columnOrderSetting = useAtomValue(env.getSettingsKeyAtom("preview:columnorder")) ?? EmptyColumnList;
     const setErrorMsg = useSetAtom(model.errorMsgAtom);
     const getIconFromMimeType = useCallback(
         (mimeType: string): string => {
@@ -211,6 +308,83 @@ function DirectoryTable({
 
     const initialSorting = defaultSort === "modtime" ? [{ id: "modtime", desc: true }] : [{ id: "name", desc: false }];
 
+    const columnVisibility = useMemo(() => {
+        const vis: Record<string, boolean> = { path: false };
+        for (const col of AdjustableColumns) {
+            vis[col.id] = !hiddenColumns.includes(col.id);
+        }
+        return vis;
+    }, [hiddenColumns]);
+
+    const columnOrder = useMemo(() => {
+        const adjustableIds = AdjustableColumns.map((c) => c.id);
+        const ordered = columnOrderSetting.filter((id) => adjustableIds.includes(id));
+        const rest = adjustableIds.filter((id) => !ordered.includes(id));
+        return ["logo", "name", ...ordered, ...rest, "path"];
+    }, [columnOrderSetting]);
+
+    const handleMoveColumn = useCallback(
+        (dragId: string, dropId: string) => {
+            const current = columnOrder.filter((id) => AdjustableColumns.some((c) => c.id === id));
+            const fromIdx = current.indexOf(dragId);
+            const toIdx = current.indexOf(dropId);
+            if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) {
+                return;
+            }
+            current.splice(fromIdx, 1);
+            current.splice(toIdx, 0, dragId);
+            fireAndForget(() => env.rpc.SetConfigCommand(TabRpcClient, { "preview:columnorder": current }));
+        },
+        [columnOrder, env]
+    );
+
+    const handleMoveColumnToEnd = useCallback(
+        (dragId: string) => {
+            const current = columnOrder.filter((id) => AdjustableColumns.some((c) => c.id === id));
+            const fromIdx = current.indexOf(dragId);
+            if (fromIdx < 0 || fromIdx === current.length - 1) {
+                return;
+            }
+            current.splice(fromIdx, 1);
+            current.push(dragId);
+            fireAndForget(() => env.rpc.SetConfigCommand(TabRpcClient, { "preview:columnorder": current }));
+        },
+        [columnOrder, env]
+    );
+
+    const handleHeaderContextMenu = useCallback(
+        (e: React.MouseEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const menu: ContextMenuItem[] = AdjustableColumns.map((col) => ({
+                label: col.label,
+                type: "checkbox" as const,
+                checked: !hiddenColumns.includes(col.id),
+                click: () => {
+                    const newHidden = hiddenColumns.includes(col.id)
+                        ? hiddenColumns.filter((id) => id !== col.id)
+                        : [...hiddenColumns, col.id];
+                    fireAndForget(() => env.rpc.SetConfigCommand(TabRpcClient, { "preview:hiddencolumns": newHidden }));
+                },
+            }));
+            menu.push(
+                { type: "separator" },
+                {
+                    label: "Reset Columns",
+                    click: () =>
+                        fireAndForget(() =>
+                            env.rpc.SetConfigCommand(TabRpcClient, {
+                                "preview:hiddencolumns": null,
+                                "preview:columnorder": null,
+                            })
+                        ),
+                }
+            );
+            ContextMenuModel.getInstance().showContextMenu(menu, e);
+        },
+        [hiddenColumns, env]
+    );
+
     const table = useReactTable({
         data,
         columns,
@@ -218,11 +392,12 @@ function DirectoryTable({
         getSortedRowModel: getSortedRowModel(),
         getCoreRowModel: getCoreRowModel(),
 
+        state: {
+            columnVisibility,
+            columnOrder,
+        },
         initialState: {
             sorting: initialSorting,
-            columnVisibility: {
-                path: false,
-            },
         },
         enableMultiSort: false,
         enableSortingRemoval: false,
@@ -247,7 +422,10 @@ function DirectoryTable({
             colSizes[`--col-${header.column.id}-size`] = header.column.getSize();
         }
         return colSizes;
-    }, [table.getState().columnSizingInfo]);
+        // columnVisibility/columnOrder are deps because getFlatHeaders only returns visible
+        // columns: without them a re-shown or re-ordered column would render with a stale or
+        // missing size variable.
+    }, [table.getState().columnSizingInfo, columnVisibility, columnOrder]);
 
     const osRef = useRef<OverlayScrollbarsComponentRef>(null);
     const bodyRef = useRef<HTMLDivElement>(null);
@@ -273,11 +451,13 @@ function DirectoryTable({
         >
             <div className="dir-table-head">
                 {table.getHeaderGroups().map((headerGroup) => (
-                    <div className="dir-table-head-row" key={headerGroup.id}>
-                        {headerGroup.headers.map((header) => (
-                            <DirectoryTableHeaderCell key={header.id} header={header} />
-                        ))}
-                    </div>
+                    <DirectoryTableHeaderRow
+                        key={headerGroup.id}
+                        headerGroup={headerGroup}
+                        onContextMenu={handleHeaderContextMenu}
+                        onMoveColumn={handleMoveColumn}
+                        onMoveColumnToEnd={handleMoveColumnToEnd}
+                    />
                 ))}
             </div>
             <TableComponent

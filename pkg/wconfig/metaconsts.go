@@ -88,6 +88,8 @@ const (
 
 	ConfigKey_PreviewShowHiddenFiles         = "preview:showhiddenfiles"
 	ConfigKey_PreviewDefaultSort             = "preview:defaultsort"
+	ConfigKey_PreviewHiddenColumns           = "preview:hiddencolumns"
+	ConfigKey_PreviewColumnOrder             = "preview:columnorder"
 
 	ConfigKey_TabPreset                      = "tab:preset"
 	ConfigKey_TabConfirmClose                = "tab:confirmclose"

@@ -39,9 +39,22 @@
                 padding: 4px 6px;
                 font-size: 0.75rem;
 
+                &.dir-table-head-row-drop-end::after {
+                    content: "";
+                    flex: 0 0 2px;
+                    background-color: var(--accent-color);
+                }
+
                 .dir-table-head-cell {
                     flex: 0 0 auto;
                     user-select: none;
+
+                    &.dir-table-head-cell-dragging {
+                        opacity: 0.4;
+                    }
+                    &.dir-table-head-cell-drop-target {
+                        box-shadow: inset 2px 0 0 0 var(--accent-color);
+                    }
                 }
                 .dir-table-head-cell:not(:first-child) {
                     position: relative;
