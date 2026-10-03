@@ -40,10 +40,16 @@ async function buildMoveToWorkspaceSubmenu(id: string, env: TabEnv): Promise<Con
     const currentWorkspaceId = globalStore.get(env.atoms.workspace)?.oid;
     const workspaceList = (await env.services.workspace.ListWorkspaces()) ?? [];
     const others = workspaceList.filter((entry) => entry.workspaceid !== currentWorkspaceId);
-    // The sidebar/switcher pins every workspace object in each window, so the atoms are already
-    // populated and can be read synchronously here.
-    const submenu: ContextMenuItem[] = others
-        .map((entry) => globalStore.get(env.wos.getWaveObjectAtom<Workspace>(makeORef("workspace", entry.workspaceid))))
+    // The WOS cache is usually warm via the sidebar/switcher, but a just-created workspace may still
+    // be fetching, so fall back to the service rather than silently omitting it.
+    const workspaces = await Promise.all(
+        others.map(
+            (entry) =>
+                globalStore.get(env.wos.getWaveObjectAtom<Workspace>(makeORef("workspace", entry.workspaceid))) ??
+                env.services.workspace.GetWorkspace(entry.workspaceid)
+        )
+    );
+    const submenu: ContextMenuItem[] = workspaces
         .filter((ws) => ws != null)
         .map((ws) => ({
             label: ws.emoji ? `${ws.emoji} ${ws.name}` : ws.name,

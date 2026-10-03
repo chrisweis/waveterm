@@ -140,7 +140,9 @@ function DirectoryTableHeaderRow({
         () => ({
             accept: ColumnDragType,
             drop: (item: { colId: string }, monitor) => {
-                if (monitor.didDrop()) {
+                // react-dnd routes a drop refused by a cell's canDrop (itself, Name) up to the row,
+                // so only treat it as "end" when the pointer is actually over the row's empty space.
+                if (monitor.didDrop() || !monitor.isOver({ shallow: true })) {
                     return;
                 }
                 onMoveColumnToEnd(item.colId);
@@ -332,7 +334,7 @@ function DirectoryTable({
                 return;
             }
             current.splice(fromIdx, 1);
-            current.splice(toIdx, 0, dragId);
+            current.splice(fromIdx < toIdx ? toIdx - 1 : toIdx, 0, dragId);
             fireAndForget(() => env.rpc.SetConfigCommand(TabRpcClient, { "preview:columnorder": current }));
         },
         [columnOrder, env]
