@@ -50,5 +50,15 @@
                 "view": "processviewer"
             }
         }
+    },
+    "defwidget@agentsearch": {
+        "display:order": 0,
+        "icon": "magnifying-glass",
+        "label": "search",
+        "blockdef": {
+            "meta": {
+                "view": "agentsearch"
+            }
+        }
     }
 }

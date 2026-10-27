@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/skratchdot/open-golang/open"
+	"github.com/wavetermdev/waveterm/pkg/agentsearch"
 	"github.com/wavetermdev/waveterm/pkg/aiusechat"
 	"github.com/wavetermdev/waveterm/pkg/aiusechat/chatstore"
 	"github.com/wavetermdev/waveterm/pkg/aiusechat/uctypes"
@@ -111,6 +112,10 @@ func (ws *WshServer) StreamTestCommand(ctx context.Context) chan wshrpc.RespOrEr
 		close(rtn)
 	}()
 	return rtn
+}
+
+func (ws *WshServer) AgentSearchCommand(ctx context.Context, data wshrpc.CommandAgentSearchData) chan wshrpc.RespOrErrorUnion[wshrpc.AgentSearchUpdate] {
+	return agentsearch.Search(ctx, data)
 }
 
 func MakePlotData(ctx context.Context, blockId string) error {

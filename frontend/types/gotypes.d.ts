@@ -80,6 +80,42 @@ declare global {
         conn?: {[key: string]: number};
     };
 
+    // wshrpc.AgentFolderResult
+    type AgentFolderResult = {
+        path: string;
+        global?: boolean;
+        missing?: boolean;
+        matches: number;
+        sessions?: number;
+        memoryfiles?: number;
+        lastactive?: number;
+        inworkspace?: boolean;
+        snippets?: AgentSnippet[];
+    };
+
+    // wshrpc.AgentSearchUpdate
+    type AgentSearchUpdate = {
+        waveresults: WaveSearchResult[];
+        folders: AgentFolderResult[];
+        scopepaths?: string[];
+        filessearched: number;
+        filestotal: number;
+        sessionfiles: number;
+        memoryfiles: number;
+        elapsedms: number;
+        done?: boolean;
+        error?: string;
+    };
+
+    // wshrpc.AgentSnippet
+    type AgentSnippet = {
+        kind: string;
+        text: string;
+        ts?: number;
+        sessionid?: string;
+        file?: string;
+    };
+
     // wshrpc.AiMessageData
     type AiMessageData = {
         message?: string;
@@ -224,6 +260,15 @@ declare global {
     type CloseTabRtnType = {
         closewindow?: boolean;
         newactivetabid?: string;
+    };
+
+    // wshrpc.CommandAgentSearchData
+    type CommandAgentSearchData = {
+        query: string;
+        workspaceid?: string;
+        scopetoworkspace?: boolean;
+        searchsessions?: boolean;
+        searchmemory?: boolean;
     };
 
     // wshrpc.CommandAuthenticateJobManagerData
@@ -2117,6 +2162,18 @@ declare global {
         meta?: boolean;
         cmd?: boolean;
         option?: boolean;
+    };
+
+    // wshrpc.WaveSearchResult
+    type WaveSearchResult = {
+        kind: string;
+        workspaceid: string;
+        workspacename?: string;
+        tabid?: string;
+        tabname?: string;
+        path?: string;
+        numtabs?: number;
+        current?: boolean;
     };
 
     // waveobj.Window

@@ -24,6 +24,12 @@ export class RpcApiType {
         return client.wshRpcCall("activity", data, opts);
     }
 
+    // command "agentsearch" [responsestream]
+	AgentSearchCommand(client: WshClient, data: CommandAgentSearchData, opts?: RpcOpts): AsyncGenerator<AgentSearchUpdate, void, boolean> {
+        if (this.mockClient) return this.mockClient.mockWshRpcStream(client, "agentsearch", data, opts);
+        return client.wshRpcStream("agentsearch", data, opts);
+    }
+
     // command "aisendmessage" [call]
     AiSendMessageCommand(client: WshClient, data: AiMessageData, opts?: RpcOpts): Promise<void> {
         if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "aisendmessage", data, opts);

@@ -23,6 +23,11 @@ func ActivityCommand(w *wshutil.WshRpc, data wshrpc.ActivityUpdate, opts *wshrpc
 	return err
 }
 
+// command "agentsearch", wshserver.AgentSearchCommand
+func AgentSearchCommand(w *wshutil.WshRpc, data wshrpc.CommandAgentSearchData, opts *wshrpc.RpcOpts) chan wshrpc.RespOrErrorUnion[wshrpc.AgentSearchUpdate] {
+	return sendRpcRequestResponseStreamHelper[wshrpc.AgentSearchUpdate](w, "agentsearch", data, opts)
+}
+
 // command "aisendmessage", wshserver.AiSendMessageCommand
 func AiSendMessageCommand(w *wshutil.WshRpc, data wshrpc.AiMessageData, opts *wshrpc.RpcOpts) error {
 	_, err := sendRpcRequestCallHelper[any](w, "aisendmessage", data, opts)

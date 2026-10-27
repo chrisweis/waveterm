@@ -45,6 +45,9 @@ export function blockViewToIcon(view: string): string {
     if (view == "processviewer") {
         return "microchip";
     }
+    if (view == "agentsearch") {
+        return "magnifying-glass";
+    }
     return "square";
 }
 
@@ -72,6 +75,9 @@ export function blockViewToName(view: string): string {
     }
     if (view == "processviewer") {
         return "Processes";
+    }
+    if (view == "agentsearch") {
+        return "Search";
     }
     return view;
 }

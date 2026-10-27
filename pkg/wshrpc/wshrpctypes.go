@@ -72,6 +72,7 @@ type WshRpcInterface interface {
 	WriteTempFileCommand(ctx context.Context, data CommandWriteTempFileData) (string, error)
 	StreamTestCommand(ctx context.Context) chan RespOrErrorUnion[int]
 	StreamCpuDataCommand(ctx context.Context, request CpuDataRequest) chan RespOrErrorUnion[TimeSeriesData]
+	AgentSearchCommand(ctx context.Context, data CommandAgentSearchData) chan RespOrErrorUnion[AgentSearchUpdate]
 	TestCommand(ctx context.Context, data string) error
 	TestMultiArgCommand(ctx context.Context, arg1 string, arg2 int, arg3 bool) (string, error)
 	SetConfigCommand(ctx context.Context, data MetaSettingsType) error
@@ -924,4 +925,58 @@ type CommandRemoteProcessListData struct {
 type CommandRemoteProcessSignalData struct {
 	Pid    int32  `json:"pid"`
 	Signal string `json:"signal"`
+}
+
+type CommandAgentSearchData struct {
+	Query            string `json:"query"`
+	WorkspaceId      string `json:"workspaceid,omitempty"`
+	ScopeToWorkspace bool   `json:"scopetoworkspace,omitempty"`
+	SearchSessions   bool   `json:"searchsessions,omitempty"`
+	SearchMemory     bool   `json:"searchmemory,omitempty"`
+}
+
+type WaveSearchResult struct {
+	Kind          string `json:"kind"`
+	WorkspaceId   string `json:"workspaceid"`
+	WorkspaceName string `json:"workspacename,omitempty"`
+	TabId         string `json:"tabid,omitempty"`
+	TabName       string `json:"tabname,omitempty"`
+	Path          string `json:"path,omitempty"`
+	NumTabs       int    `json:"numtabs,omitempty"`
+	Current       bool   `json:"current,omitempty"`
+}
+
+type AgentSnippet struct {
+	Kind      string `json:"kind"`
+	Text      string `json:"text"`
+	Ts        int64  `json:"ts,omitempty"`
+	SessionId string `json:"sessionid,omitempty"`
+	File      string `json:"file,omitempty"`
+}
+
+type AgentFolderResult struct {
+	Path        string         `json:"path"`
+	Global      bool           `json:"global,omitempty"`
+	Missing     bool           `json:"missing,omitempty"`
+	Matches     int            `json:"matches"`
+	Sessions    int            `json:"sessions,omitempty"`
+	MemoryFiles int            `json:"memoryfiles,omitempty"`
+	LastActive  int64          `json:"lastactive,omitempty"`
+	InWorkspace bool           `json:"inworkspace,omitempty"`
+	Snippets    []AgentSnippet `json:"snippets,omitempty"`
+}
+
+// AgentSearchUpdate is streamed repeatedly; each update carries the full current result set
+// (not a delta), so the client can simply replace its state.
+type AgentSearchUpdate struct {
+	WaveResults   []WaveSearchResult  `json:"waveresults"`
+	Folders       []AgentFolderResult `json:"folders"`
+	ScopePaths    []string            `json:"scopepaths,omitempty"`
+	FilesSearched int                 `json:"filessearched"`
+	FilesTotal    int                 `json:"filestotal"`
+	SessionFiles  int                 `json:"sessionfiles"`
+	MemoryFiles   int                 `json:"memoryfiles"`
+	ElapsedMs     int64               `json:"elapsedms"`
+	Done          bool                `json:"done,omitempty"`
+	Error         string              `json:"error,omitempty"`
 }
