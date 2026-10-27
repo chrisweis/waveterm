@@ -93,6 +93,11 @@ class WSControl {
         };
         // turns out onerror is not necessary (onclose always follows onerror)
         // this.wsConn.onerror = this.onerror;
+        // ...except in electron main, where "ws" is an EventEmitter: an "error" with no listener
+        // (e.g. ETIMEDOUT reconnecting after system sleep) becomes an uncaughtException and quits the app.
+        this.wsConn.onerror = (e: Event) => {
+            dlog("connection error", e);
+        };
     }
 
     reconnect(forceClose?: boolean) {
