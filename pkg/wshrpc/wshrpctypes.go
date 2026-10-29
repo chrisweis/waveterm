@@ -955,15 +955,16 @@ type AgentSnippet struct {
 }
 
 type AgentFolderResult struct {
-	Path        string         `json:"path"`
-	Global      bool           `json:"global,omitempty"`
-	Missing     bool           `json:"missing,omitempty"`
-	Matches     int            `json:"matches"`
-	Sessions    int            `json:"sessions,omitempty"`
-	MemoryFiles int            `json:"memoryfiles,omitempty"`
-	LastActive  int64          `json:"lastactive,omitempty"`
-	InWorkspace bool           `json:"inworkspace,omitempty"`
-	Snippets    []AgentSnippet `json:"snippets,omitempty"`
+	Path        string             `json:"path"`
+	Global      bool               `json:"global,omitempty"`
+	Missing     bool               `json:"missing,omitempty"`
+	Matches     int                `json:"matches"`
+	Sessions    int                `json:"sessions,omitempty"`
+	MemoryFiles int                `json:"memoryfiles,omitempty"`
+	LastActive  int64              `json:"lastactive,omitempty"`
+	LastSession string             `json:"lastsession,omitempty"`
+	Tabs        []WaveSearchResult `json:"tabs,omitempty"`
+	Snippets    []AgentSnippet     `json:"snippets,omitempty"`
 }
 
 // AgentSearchUpdate is streamed repeatedly; each update carries the full current result set

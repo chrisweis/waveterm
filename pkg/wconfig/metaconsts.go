@@ -91,6 +91,9 @@ const (
 	ConfigKey_PreviewHiddenColumns           = "preview:hiddencolumns"
 	ConfigKey_PreviewColumnOrder             = "preview:columnorder"
 
+	ConfigKey_AgentSearchTermCmd             = "agentsearch:termcmd"
+	ConfigKey_AgentSearchTermCmdMode         = "agentsearch:termcmdmode"
+
 	ConfigKey_TabPreset                      = "tab:preset"
 	ConfigKey_TabConfirmClose                = "tab:confirmclose"
 	ConfigKey_TabBackground                  = "tab:background"

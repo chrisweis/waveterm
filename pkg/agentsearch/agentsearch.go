@@ -27,6 +27,7 @@ const (
 
 	MaxSnippetsPerFolder = 5
 	MaxStoredSnippets    = 40
+	MaxTabsPerFolder     = 6
 	UpdateInterval       = 250 * time.Millisecond
 	MinQueryLen          = 2
 )
@@ -40,13 +41,15 @@ type searchFile struct {
 }
 
 type folderAgg struct {
-	result   wshrpc.AgentFolderResult
-	snippets []wshrpc.AgentSnippet
+	result        wshrpc.AgentFolderResult
+	snippets      []wshrpc.AgentSnippet
+	lastSessionTs int64
 }
 
 type searchState struct {
 	lock     sync.Mutex
 	folders  map[string]*folderAgg
+	tabs     []tabRef
 	searched atomic.Int64
 }
 
@@ -57,11 +60,18 @@ func (s *searchState) addFileResult(f searchFile, matches int, lastTs int64, sni
 	agg := s.folders[key]
 	if agg == nil {
 		agg = &folderAgg{result: wshrpc.AgentFolderResult{Path: f.folder, Global: f.global, Missing: f.missing}}
+		if !f.global {
+			agg.result.Tabs = tabsForFolder(f.folder, s.tabs)
+		}
 		s.folders[key] = agg
 	}
 	agg.result.Matches += matches
 	if f.isSession {
 		agg.result.Sessions++
+		if lastTs >= agg.lastSessionTs {
+			agg.lastSessionTs = lastTs
+			agg.result.LastSession = sessionIdFromPath(f.path)
+		}
 	} else {
 		agg.result.MemoryFiles++
 	}
@@ -75,7 +85,7 @@ func (s *searchState) addFileResult(f searchFile, matches int, lastTs int64, sni
 	}
 }
 
-func (s *searchState) snapshot(wsPaths []string) []wshrpc.AgentFolderResult {
+func (s *searchState) snapshot() []wshrpc.AgentFolderResult {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	rtn := make([]wshrpc.AgentFolderResult, 0, len(s.folders))
@@ -88,7 +98,6 @@ func (s *searchState) snapshot(wsPaths []string) []wshrpc.AgentFolderResult {
 			snips = snips[:MaxSnippetsPerFolder]
 		}
 		res.Snippets = snips
-		res.InWorkspace = !res.Global && pathInScope(res.Path, wsPaths)
 		rtn = append(rtn, res)
 	}
 	sort.Slice(rtn, func(i, j int) bool {
@@ -133,12 +142,12 @@ func runSearch(ctx context.Context, data wshrpc.CommandAgentSearchData, ch chan 
 		sendUpdate(ctx, ch, wshrpc.AgentSearchUpdate{Done: true, Error: fmt.Sprintf("enter at least %d characters", MinQueryLen)})
 		return
 	}
-	wsPaths := getWorkspacePaths(ctx, data.WorkspaceId)
 	var scopePaths []string
 	if data.ScopeToWorkspace {
-		scopePaths = wsPaths
+		scopePaths = getWorkspacePaths(ctx, data.WorkspaceId)
 	}
-	waveResults := searchWave(ctx, query, data.WorkspaceId, data.ScopeToWorkspace)
+	workspaces := loadWorkspaces(ctx, data.WorkspaceId)
+	waveResults := searchWave(workspaces, query, data.WorkspaceId, data.ScopeToWorkspace)
 	files := collectClaudeFiles(data.SearchSessions, data.SearchMemory)
 	var sessionCount, memoryCount int
 	var scopedFiles []searchFile
@@ -153,11 +162,11 @@ func runSearch(ctx context.Context, data wshrpc.CommandAgentSearchData, ch chan 
 		}
 		scopedFiles = append(scopedFiles, f)
 	}
-	state := &searchState{folders: make(map[string]*folderAgg)}
+	state := &searchState{folders: make(map[string]*folderAgg), tabs: makeTabRefs(workspaces, data.WorkspaceId)}
 	makeUpdate := func(done bool) wshrpc.AgentSearchUpdate {
 		return wshrpc.AgentSearchUpdate{
 			WaveResults:   waveResults,
-			Folders:       state.snapshot(wsPaths),
+			Folders:       state.snapshot(),
 			ScopePaths:    scopePaths,
 			FilesSearched: int(state.searched.Load()),
 			FilesTotal:    len(scopedFiles),

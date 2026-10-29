@@ -257,6 +257,7 @@ func searchSessionFile(path string, m *matcher) (int, int64, []wshrpc.AgentSnipp
 	var lastTs int64
 	var snippets []wshrpc.AgentSnippet
 	var lowerBuf []byte
+	sessionId := sessionIdFromPath(path)
 	for {
 		line, readErr := readLine(r)
 		if len(line) > 0 {
@@ -269,7 +270,7 @@ func searchSessionFile(path string, m *matcher) (int, int64, []wshrpc.AgentSnipp
 						lastTs = ts
 					}
 					if snip != "" && len(snippets) < MaxSnippetsPerFolder {
-						snippets = append(snippets, wshrpc.AgentSnippet{Kind: SnippetKindSession, Text: snip, Ts: ts, File: path})
+						snippets = append(snippets, wshrpc.AgentSnippet{Kind: SnippetKindSession, Text: snip, Ts: ts, SessionId: sessionId, File: path})
 					}
 				}
 			}
@@ -416,4 +417,9 @@ func collapseSpace(s string) string {
 		lastSpace = false
 	}
 	return strings.TrimSpace(sb.String())
+}
+
+// sessionIdFromPath relies on Claude Code naming each transcript <session-id>.jsonl, which is the id `claude -r` takes.
+func sessionIdFromPath(path string) string {
+	return strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
 }

@@ -1,13 +1,18 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { atoms, createBlock, getApi, globalStore } from "@/app/store/global";
-import { WorkspaceService } from "@/app/store/services";
+import { atoms, createBlock, getApi, getSettingsKeyAtom, globalStore, WOS } from "@/app/store/global";
+import { BlockService, WorkspaceService } from "@/app/store/services";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
-import { fireAndForget } from "@/util/util";
+import { fireAndForget, stringToBase64 } from "@/util/util";
 import * as jotai from "jotai";
 import { AgentSearchView } from "./agentsearch";
+
+const ShellStartTimeoutMs = 10000;
+const ShellPollMs = 150;
+
+export type TermCmdMode = "run" | "paste";
 
 export type SearchRow = { kind: "wave"; wave: WaveSearchResult } | { kind: "folder"; folder: AgentFolderResult };
 
@@ -37,6 +42,9 @@ export class AgentSearchViewModel implements ViewModel {
     errorAtom = jotai.atom<string>(null) as jotai.PrimitiveAtom<string>;
     selectedKeyAtom = jotai.atom<string>(null) as jotai.PrimitiveAtom<string>;
     expandedAtom = jotai.atom<Set<string>>(new Set<string>()) as jotai.PrimitiveAtom<Set<string>>;
+    settingsOpenAtom = jotai.atom<boolean>(false) as jotai.PrimitiveAtom<boolean>;
+    termCmdAtom = getSettingsKeyAtom("agentsearch:termcmd");
+    termCmdModeAtom: jotai.Atom<TermCmdMode>;
 
     rowsAtom: jotai.Atom<SearchRow[]>;
 
@@ -46,6 +54,9 @@ export class AgentSearchViewModel implements ViewModel {
 
     constructor({ blockId }: ViewModelInitType) {
         this.blockId = blockId;
+        this.termCmdModeAtom = jotai.atom((get) =>
+            get(getSettingsKeyAtom("agentsearch:termcmdmode")) == "paste" ? "paste" : "run"
+        );
         this.rowsAtom = jotai.atom((get) => {
             const res = get(this.resultAtom);
             if (res == null) {
@@ -72,6 +83,45 @@ export class AgentSearchViewModel implements ViewModel {
         }
         this.inputRef.current.focus();
         return true;
+    }
+
+    getSettingsMenuItems(): ContextMenuItem[] {
+        const cmd = globalStore.get(this.termCmdAtom) ?? "";
+        const mode = globalStore.get(this.termCmdModeAtom);
+        return [
+            {
+                label: cmd ? "Edit Terminal Command..." : "Set Terminal Command...",
+                sublabel: cmd || undefined,
+                click: () => globalStore.set(this.settingsOpenAtom, true),
+            },
+            {
+                label: "Terminal Command Mode",
+                type: "submenu",
+                submenu: [
+                    {
+                        label: "Run Command",
+                        type: "checkbox",
+                        checked: mode == "run",
+                        click: () => this.saveTermSettings(cmd, "run"),
+                    },
+                    {
+                        label: "Paste Command (Don't Run)",
+                        type: "checkbox",
+                        checked: mode == "paste",
+                        click: () => this.saveTermSettings(cmd, "paste"),
+                    },
+                ],
+            },
+        ];
+    }
+
+    saveTermSettings(cmd: string, mode: TermCmdMode) {
+        fireAndForget(() =>
+            RpcApi.SetConfigCommand(TabRpcClient, {
+                "agentsearch:termcmd": cmd.trim(),
+                "agentsearch:termcmdmode": mode,
+            })
+        );
     }
 
     dispose() {
@@ -205,10 +255,107 @@ export class AgentSearchViewModel implements ViewModel {
     }
 
     openTerminal(path: string) {
-        fireAndForget(() => createBlock({ meta: { view: "term", controller: "shell", "cmd:cwd": path } }));
+        this.openTerminalWithCmd(path, (globalStore.get(this.termCmdAtom) ?? "").trim());
+    }
+
+    resumeSession(path: string, sessionId: string) {
+        this.openTerminalWithCmd(path, makeResumeCmd(globalStore.get(this.termCmdAtom) ?? "", sessionId));
+    }
+
+    openTerminalWithCmd(path: string, cmd: string) {
+        const mode = globalStore.get(this.termCmdModeAtom);
+        fireAndForget(async () => {
+            const initScripts = cmd ? makeInitScripts(cmd, mode) : {};
+            const blockId = await createBlock({
+                meta: { view: "term", controller: "shell", "cmd:cwd": path, ...initScripts },
+            });
+            if (!cmd) {
+                return;
+            }
+            await clearInitScriptsOnceStarted(blockId, Object.keys(initScripts));
+            if (mode == "paste") {
+                await pasteWhenReady(blockId, cmd);
+            }
+        });
     }
 
     copyPath(path: string) {
         fireAndForget(() => navigator.clipboard.writeText(path));
     }
+}
+
+function psQuote(s: string): string {
+    return "'" + s.split("'").join("''") + "'";
+}
+
+function shQuote(s: string): string {
+    return "'" + s.split("'").join(`'\\''`) + "'";
+}
+
+// Typing the command into the pty races shell startup: Windows PowerShell has no shell integration to say when the
+// prompt is up, and input sent while Wave's startup script is still running gets swallowed. Init scripts run inside
+// startup instead, so "run" is deterministic. For "paste", pwsh and zsh can prefill the first prompt's edit buffer
+// from the init script; bash and fish can't, so pasteWhenReady types it once their integration reports the prompt.
+function makeInitScripts(cmd: string, mode: TermCmdMode): MetaType {
+    if (mode == "run") {
+        return { "cmd:initscript": cmd };
+    }
+    return {
+        "cmd:initscript.pwsh": `$null = Register-EngineEvent -SourceIdentifier PowerShell.OnIdle -MaxTriggerCount 1 -Action { [Microsoft.PowerShell.PSConsoleReadLine]::Insert(${psQuote(cmd)}) }`,
+        "cmd:initscript.zsh": `print -z -- ${shQuote(cmd)}`,
+    };
+}
+
+function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// The init script is read from block meta each time the shell starts, so it's removed once this shell is running;
+// otherwise every restart of the terminal (including reopening Wave) would run the command again.
+async function clearInitScriptsOnceStarted(blockId: string, keys: string[]) {
+    const deadline = Date.now() + ShellStartTimeoutMs;
+    while (Date.now() < deadline) {
+        const status = await BlockService.GetControllerStatus(blockId).catch((): BlockControllerRuntimeStatus => null);
+        if (status?.shellprocstatus == "running" || status?.shellprocstatus == "done") {
+            break;
+        }
+        await sleep(ShellPollMs);
+    }
+    const meta: MetaType = {};
+    for (const key of keys) {
+        meta[key] = null;
+    }
+    await RpcApi.SetMetaCommand(TabRpcClient, { oref: WOS.makeORef("block", blockId), meta });
+}
+
+async function pasteWhenReady(blockId: string, cmd: string) {
+    const oref = WOS.makeORef("block", blockId);
+    const deadline = Date.now() + ShellStartTimeoutMs;
+    while (Date.now() < deadline) {
+        const rtInfo = await RpcApi.GetRTInfoCommand(TabRpcClient, { oref }).catch((): ObjRTInfo => null);
+        if (rtInfo?.["shell:state"] == "ready") {
+            const shellType = rtInfo["shell:type"];
+            if (shellType == "bash" || shellType == "fish") {
+                await RpcApi.ControllerInputCommand(TabRpcClient, {
+                    blockid: blockId,
+                    inputdata64: stringToBase64(cmd),
+                });
+            }
+            return;
+        }
+        await sleep(ShellPollMs);
+    }
+}
+
+// Builds on the configured command so its flags (e.g. --dangerously-skip-permissions) carry over to the resume.
+// A command that isn't claude at all can't take a session id, so that falls back to a plain resume.
+export function makeResumeCmd(termCmd: string, sessionId: string): string {
+    const cmd = termCmd.trim();
+    if (/(^|\s)(-r|--resume)$/.test(cmd)) {
+        return `${cmd} ${sessionId}`;
+    }
+    if (/^claude(\s|$)/.test(cmd)) {
+        return `${cmd} --resume ${sessionId}`;
+    }
+    return `claude --resume ${sessionId}`;
 }

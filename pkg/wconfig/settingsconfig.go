@@ -141,6 +141,9 @@ type SettingsType struct {
 	PreviewHiddenColumns   []string `json:"preview:hiddencolumns,omitempty"`
 	PreviewColumnOrder     []string `json:"preview:columnorder,omitempty"`
 
+	AgentSearchTermCmd     string `json:"agentsearch:termcmd,omitempty"`
+	AgentSearchTermCmdMode string `json:"agentsearch:termcmdmode,omitempty" jsonschema:"enum=run,enum=paste"`
+
 	TabPreset       string `json:"tab:preset,omitempty"`
 	TabConfirmClose bool   `json:"tab:confirmclose,omitempty"`
 	TabBackground   string `json:"tab:background,omitempty"`

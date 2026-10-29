@@ -89,7 +89,8 @@ declare global {
         sessions?: number;
         memoryfiles?: number;
         lastactive?: number;
-        inworkspace?: boolean;
+        lastsession?: string;
+        tabs?: WaveSearchResult[];
         snippets?: AgentSnippet[];
     };
 
@@ -1504,6 +1505,8 @@ declare global {
         "preview:defaultsort"?: string;
         "preview:hiddencolumns"?: string[];
         "preview:columnorder"?: string[];
+        "agentsearch:termcmd"?: string;
+        "agentsearch:termcmdmode"?: string;
         "tab:preset"?: string;
         "tab:confirmclose"?: boolean;
         "tab:background"?: string;

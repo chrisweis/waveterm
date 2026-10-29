@@ -253,6 +253,16 @@
           },
           "type": "array"
         },
+        "agentsearch:termcmd": {
+          "type": "string"
+        },
+        "agentsearch:termcmdmode": {
+          "type": "string",
+          "enum": [
+            "run",
+            "paste"
+          ]
+        },
         "tab:preset": {
           "type": "string"
         },

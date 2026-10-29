@@ -160,3 +160,16 @@ func TestWalkEncoded(t *testing.T) {
 		t.Fatalf("walkEncoded = %q, want %q", got, want)
 	}
 }
+
+func TestTabsForFolder(t *testing.T) {
+	home := homeDir()
+	repo := filepath.Join(home, "repo")
+	tabs := []tabRef{
+		{res: wshrpc.WaveSearchResult{TabId: "other"}, paths: []string{filepath.Join(home, "elsewhere")}},
+		{res: wshrpc.WaveSearchResult{TabId: "sub"}, paths: []string{home, filepath.Join(repo, "sub")}},
+	}
+	got := tabsForFolder(repo, tabs)
+	if len(got) != 1 || got[0].TabId != "sub" || got[0].Path != filepath.Join(repo, "sub") {
+		t.Fatalf("tabsForFolder = %+v", got)
+	}
+}

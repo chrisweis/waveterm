@@ -1,10 +1,11 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { globalStore } from "@/app/store/global";
 import { cn } from "@/util/util";
 import { useAtomValue } from "jotai";
 import * as React from "react";
-import { type AgentSearchViewModel, rowKey } from "./agentsearch-model";
+import { type AgentSearchViewModel, rowKey, type TermCmdMode } from "./agentsearch-model";
 
 const SnippetsCollapsed = 2;
 
@@ -165,17 +166,18 @@ function FolderResultCard({
     query,
     selected,
     expanded,
-    scoped,
+    termCmd,
 }: {
     model: AgentSearchViewModel;
     folder: AgentFolderResult;
     query: string;
     selected: boolean;
     expanded: boolean;
-    scoped: boolean;
+    termCmd: string;
 }) {
     const key = rowKey({ kind: "folder", folder });
     const snippets = folder.snippets ?? [];
+    const tabs = folder.tabs ?? [];
     const shown = expanded ? snippets : snippets.slice(0, SnippetsCollapsed);
     const meta: string[] = [plural(folder.matches, "match", "matches")];
     if (folder.sessions) {
@@ -201,7 +203,6 @@ function FolderResultCard({
                 <span className="min-w-0 truncate font-mono text-[13px] font-medium text-primary" title={folder.path}>
                     {displayPath}
                 </span>
-                {folder.inworkspace && !scoped && <Chip className="bg-accent/18 text-accenthover">open in tab</Chip>}
                 {folder.missing && <Chip className="bg-error/20 text-error">not found on disk</Chip>}
                 {!folder.missing && (
                     <div
@@ -219,24 +220,58 @@ function FolderResultCard({
                         <ActionButton
                             icon="terminal"
                             label="Terminal"
-                            title="New terminal here"
+                            title={termCmd ? `New terminal here: ${termCmd}` : "New terminal here"}
                             onClick={() => model.openTerminal(folder.path)}
                         />
+                        {folder.lastsession && (
+                            <ActionButton
+                                icon="rotate-left"
+                                label="Resume"
+                                title="Resume the most recent matching Claude session"
+                                onClick={() => model.resumeSession(folder.path, folder.lastsession)}
+                            />
+                        )}
                         <ActionButton icon="copy" title="Copy path" onClick={() => model.copyPath(folder.path)} />
                     </div>
                 )}
             </div>
             <div className="text-[11px] text-muted">{meta.join(" · ")}</div>
+            {tabs.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[11px] text-muted">Open in tab:</span>
+                    {tabs.map((t) => (
+                        <ActionButton
+                            key={t.tabid}
+                            icon="window-maximize"
+                            label={t.current ? t.tabname : `${t.tabname} · ${t.workspacename}`}
+                            title={`Switch to tab "${t.tabname}"${t.path ? ` (${t.path})` : ""}`}
+                            onClick={() => model.switchTo(t)}
+                        />
+                    ))}
+                </div>
+            )}
             {shown.map((s, idx) => (
-                <div key={idx} className="flex items-start gap-2">
+                <div key={idx} className="group/snip flex items-start gap-2">
                     <Chip
                         className={cn("font-mono text-[10px]", s.kind == "memory" ? "text-warning" : "text-secondary")}
                     >
                         {s.kind}
                     </Chip>
-                    <span className="min-w-0 break-words text-[12px] text-secondary">
+                    <span className="min-w-0 flex-1 break-words text-[12px] text-secondary">
                         <Highlight text={s.text} query={query} />
                     </span>
+                    {s.sessionid && !folder.missing && (
+                        <button
+                            className="invisible shrink-0 cursor-pointer text-[11px] text-accent group-hover/snip:visible hover:underline"
+                            title={`Resume session ${s.sessionid}`}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                model.resumeSession(folder.path, s.sessionid);
+                            }}
+                        >
+                            Resume
+                        </button>
+                    )}
                 </div>
             ))}
             {snippets.length > SnippetsCollapsed && (
@@ -245,6 +280,78 @@ function FolderResultCard({
                     {expanded ? "Show fewer" : `Show ${snippets.length - SnippetsCollapsed} more`}
                 </div>
             )}
+        </div>
+    );
+}
+
+function TermCmdSettings({ model }: { model: AgentSearchViewModel }) {
+    const savedCmd = useAtomValue(model.termCmdAtom) ?? "";
+    const savedMode = useAtomValue(model.termCmdModeAtom);
+    const [cmd, setCmd] = React.useState(savedCmd);
+    const [mode, setMode] = React.useState<TermCmdMode>(savedMode);
+    const close = () => {
+        globalStore.set(model.settingsOpenAtom, false);
+        model.giveFocus();
+    };
+    const save = () => {
+        model.saveTermSettings(cmd, mode);
+        close();
+    };
+    const modes: [TermCmdMode, string][] = [
+        ["run", "Run the command"],
+        ["paste", "Paste it without running"],
+    ];
+    return (
+        <div className="flex shrink-0 flex-col gap-2 rounded-md border border-white/12 bg-white/[0.035] p-3">
+            <div className="text-[12px] font-medium text-primary">Terminal command</div>
+            <div className="text-[11px] text-muted">
+                Typed into the new terminal when you click Terminal on a result. Leave empty for a plain shell. Resume
+                reuses a claude command with the session id added, keeping your flags.
+            </div>
+            <input
+                autoFocus
+                className="h-[30px] rounded border border-white/16 bg-black/25 px-2 font-mono text-[12px] text-primary outline-none placeholder:text-muted focus:border-accent/90"
+                placeholder="e.g. claude --dangerously-skip-permissions --chrome -r"
+                value={cmd}
+                onChange={(e) => setCmd(e.target.value)}
+                onKeyDown={(e) => {
+                    if (e.key == "Enter") {
+                        e.preventDefault();
+                        save();
+                    } else if (e.key == "Escape") {
+                        e.preventDefault();
+                        close();
+                    }
+                }}
+                spellCheck={false}
+            />
+            <div className="flex flex-wrap items-center gap-4">
+                {modes.map(([value, label]) => (
+                    <label key={value} className="flex cursor-pointer items-center gap-1.5 text-[12px] text-primary">
+                        <input
+                            type="radio"
+                            className="cursor-pointer accent-[var(--color-accent)]"
+                            checked={mode == value}
+                            onChange={() => setMode(value)}
+                        />
+                        {label}
+                    </label>
+                ))}
+                <div className="ml-auto flex items-center gap-1.5">
+                    <button
+                        className="cursor-pointer rounded px-3 py-1 text-[12px] text-secondary transition-colors hover:bg-white/8"
+                        onClick={close}
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        className="cursor-pointer rounded bg-accent/80 px-3 py-1 text-[12px] font-semibold text-primary transition-colors hover:bg-accent"
+                        onClick={save}
+                    >
+                        Save
+                    </button>
+                </div>
+            </div>
         </div>
     );
 }
@@ -284,6 +391,8 @@ export const AgentSearchView: React.FC<ViewComponentProps<AgentSearchViewModel>>
     const error = useAtomValue(model.errorAtom);
     const selectedKey = useAtomValue(model.selectedKeyAtom);
     const expanded = useAtomValue(model.expandedAtom);
+    const settingsOpen = useAtomValue(model.settingsOpenAtom);
+    const termCmd = useAtomValue(model.termCmdAtom) ?? "";
     const selectedRef = React.useRef<HTMLDivElement>(null);
 
     React.useEffect(() => {
@@ -345,6 +454,7 @@ export const AgentSearchView: React.FC<ViewComponentProps<AgentSearchViewModel>>
                     {searching ? "searching…" : "Enter ↵"}
                 </span>
             </div>
+            {settingsOpen && <TermCmdSettings model={model} />}
             <div className="flex shrink-0 items-center gap-2">
                 <label className="flex cursor-pointer items-center gap-2 text-[12px] text-primary">
                     <input
@@ -447,7 +557,7 @@ export const AgentSearchView: React.FC<ViewComponentProps<AgentSearchViewModel>>
                                     query={submittedQuery}
                                     selected={key == selectedKey}
                                     expanded={expanded.has(key)}
-                                    scoped={scoped}
+                                    termCmd={termCmd}
                                 />
                             );
                         })}

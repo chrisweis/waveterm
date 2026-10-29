@@ -137,10 +137,10 @@ func getWorkspacePaths(ctx context.Context, workspaceId string) []string {
 
 // searchWave matches the query against workspace names, tab names, and the folders open in each tab.
 // Workspaces come first, then tabs; the caller's current workspace sorts ahead of the others.
-func searchWave(ctx context.Context, query string, currentWsId string, scopeToWorkspace bool) []wshrpc.WaveSearchResult {
+func searchWave(workspaces []workspaceInfo, query string, currentWsId string, scopeToWorkspace bool) []wshrpc.WaveSearchResult {
 	lq := strings.ToLower(query)
 	var wsResults, tabResults []wshrpc.WaveSearchResult
-	for _, wi := range loadWorkspaces(ctx, currentWsId) {
+	for _, wi := range workspaces {
 		if scopeToWorkspace && wi.ws.OID != currentWsId {
 			continue
 		}
@@ -180,15 +180,79 @@ func searchWave(ctx context.Context, query string, currentWsId string, scopeToWo
 			})
 		}
 	}
-	byCurrentThenName := func(rs []wshrpc.WaveSearchResult) {
-		sort.SliceStable(rs, func(i, j int) bool {
-			if rs[i].Current != rs[j].Current {
-				return rs[i].Current
-			}
-			return strings.ToLower(rs[i].WorkspaceName) < strings.ToLower(rs[j].WorkspaceName)
-		})
-	}
-	byCurrentThenName(wsResults)
-	byCurrentThenName(tabResults)
+	sortCurrentThenName(wsResults)
+	sortCurrentThenName(tabResults)
 	return append(wsResults, tabResults...)
+}
+
+func sortCurrentThenName(rs []wshrpc.WaveSearchResult) {
+	sort.SliceStable(rs, func(i, j int) bool {
+		if rs[i].Current != rs[j].Current {
+			return rs[i].Current
+		}
+		return strings.ToLower(rs[i].WorkspaceName) < strings.ToLower(rs[j].WorkspaceName)
+	})
+}
+
+type tabRef struct {
+	res   wshrpc.WaveSearchResult
+	paths []string
+}
+
+func makeTabRefs(workspaces []workspaceInfo, currentWsId string) []tabRef {
+	var rtn []tabRef
+	for _, wi := range workspaces {
+		for _, ti := range wi.tabs {
+			if len(ti.paths) == 0 {
+				continue
+			}
+			rtn = append(rtn, tabRef{
+				res: wshrpc.WaveSearchResult{
+					Kind:          WaveResultKindTab,
+					WorkspaceId:   wi.ws.OID,
+					WorkspaceName: wi.ws.Name,
+					TabId:         ti.tab.OID,
+					TabName:       ti.tab.Name,
+					Current:       wi.ws.OID == currentWsId,
+				},
+				paths: ti.paths,
+			})
+		}
+	}
+	sort.SliceStable(rtn, func(i, j int) bool {
+		if rtn[i].res.Current != rtn[j].res.Current {
+			return rtn[i].res.Current
+		}
+		return strings.ToLower(rtn[i].res.WorkspaceName) < strings.ToLower(rtn[j].res.WorkspaceName)
+	})
+	return rtn
+}
+
+// tabsForFolder returns the open tabs with a terminal or Files view in folder (or in a parent of it).
+// Unlike the workspace scope check, a tab sitting in the home dir or a volume root doesn't count as being in
+// every folder below it, or nearly every result would list it.
+func tabsForFolder(folder string, tabs []tabRef) []wshrpc.WaveSearchResult {
+	fk := folderKey(folder)
+	homeKey := folderKey(homeDir())
+	var rtn []wshrpc.WaveSearchResult
+	for _, t := range tabs {
+		matchedPath := ""
+		for _, p := range t.paths {
+			pk := folderKey(p)
+			if isUnder(pk, fk) || (pk != homeKey && !isVolumeRoot(pk) && isUnder(fk, pk)) {
+				matchedPath = p
+				break
+			}
+		}
+		if matchedPath == "" {
+			continue
+		}
+		res := t.res
+		res.Path = matchedPath
+		rtn = append(rtn, res)
+		if len(rtn) >= MaxTabsPerFolder {
+			break
+		}
+	}
+	return rtn
 }
