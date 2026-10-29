@@ -292,13 +292,24 @@ function shQuote(s: string): string {
     return "'" + s.split("'").join(`'\\''`) + "'";
 }
 
+function fishQuote(s: string): string {
+    return "'" + s.split("\\").join("\\\\").split("'").join("\\'") + "'";
+}
+
 // Typing the command into the pty races shell startup: Windows PowerShell has no shell integration to say when the
 // prompt is up, and input sent while Wave's startup script is still running gets swallowed. Init scripts run inside
 // startup instead, so "run" is deterministic. For "paste", pwsh and zsh can prefill the first prompt's edit buffer
 // from the init script; bash and fish can't, so pasteWhenReady types it once their integration reports the prompt.
 function makeInitScripts(cmd: string, mode: TermCmdMode): MetaType {
     if (mode == "run") {
-        return { "cmd:initscript": cmd };
+        // Wave sources init scripts before the user's rc files (~/.zshrc, ~/.bash_profile, config.fish), so tools whose
+        // PATH entry lives there (e.g. claude in ~/.local/bin) aren't found yet; run on the first prompt instead.
+        return {
+            "cmd:initscript": cmd,
+            "cmd:initscript.zsh": `_wave_as_run() { add-zsh-hook -d precmd _wave_as_run; eval ${shQuote(cmd)}; }; autoload -Uz add-zsh-hook; add-zsh-hook precmd _wave_as_run`,
+            "cmd:initscript.bash": `_wave_as_run() { unset -f _wave_as_run; eval ${shQuote(cmd)}; }; precmd_functions+=(_wave_as_run)`,
+            "cmd:initscript.fish": `function _wave_as_run --on-event fish_prompt; functions -e _wave_as_run; eval ${fishQuote(cmd)}; end`,
+        };
     }
     return {
         "cmd:initscript.pwsh": `$null = Register-EngineEvent -SourceIdentifier PowerShell.OnIdle -MaxTriggerCount 1 -Action { [Microsoft.PowerShell.PSConsoleReadLine]::Insert(${psQuote(cmd)}) }`,
