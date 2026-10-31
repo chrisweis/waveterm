@@ -398,7 +398,7 @@ const DockSidebarRow = memo(({ blockId, compact }: { blockId: string; compact: b
             openDelay={compact ? 0 : 600}
             hideOnClick
             divClassName={cn(
-                "dock-entry relative flex h-8 cursor-pointer items-center rounded-md transition-colors select-none hover:bg-hover",
+                "dock-entry relative mx-1.5 flex h-8 cursor-pointer items-center rounded-md transition-colors select-none hover:bg-hover",
                 compact ? "justify-center" : "gap-2.5 px-2",
                 isOpen ? "bg-hover text-primary" : "text-secondary"
             )}
@@ -412,43 +412,36 @@ const DockSidebarRow = memo(({ blockId, compact }: { blockId: string; compact: b
                     showDockedBlockMenu(blockId, e);
                 }}
             >
-                {isOpen && <span className="absolute top-1.5 bottom-1.5 left-0 w-0.5 rounded-full bg-accent" />}
+                <span
+                    className={cn(
+                        "absolute top-1.5 right-0 bottom-1.5 w-[3px] rounded-l",
+                        isOpen ? "bg-accent" : "bg-accent/40"
+                    )}
+                />
                 <i
                     className={cn(makeIconClass(info.icon, true, { defaultIcon: "browser" }), "shrink-0 text-[12px]")}
                     style={{ color: info.color }}
                 />
                 {!compact && <div className="truncate text-[12px]">{info.label}</div>}
-                {!compact && (
-                    <i
-                        className={cn(
-                            "fa fa-solid ml-auto shrink-0 text-[9px] text-muted",
-                            isOpen ? "fa-angles-left" : "fa-angles-right"
-                        )}
-                    />
-                )}
             </div>
         </Tooltip>
     );
 });
 DockSidebarRow.displayName = "DockSidebarRow";
 
-// Left-docked entries sit in the workspace sidebar's column, under the workspace list, as their own card, so they
-// take no extra width.
+// Left-docked entries sit at the top of the workspace sidebar's column, mirroring the right-docked ones at the top of
+// the widgets bar (same edge marker facing the tab, same divider), so they take no extra width.
 export const DockSidebarSection = memo(({ compact }: { compact: boolean }) => {
     const leftIds = useAtomValue(DockModel.getInstance().sideIdsAtoms.left);
     if (leftIds.length == 0) {
         return null;
     }
     return (
-        <div className="mx-1.5 mb-1.5 flex shrink-0 flex-col gap-0.5 rounded-md border border-border bg-white/[0.03] p-1">
-            {!compact && (
-                <div className="px-2 pt-0.5 pb-1 text-[10px] font-semibold tracking-wide text-muted uppercase">
-                    Docked
-                </div>
-            )}
+        <div className="flex shrink-0 flex-col gap-0.5 pt-1.5">
             {leftIds.map((id) => (
                 <DockSidebarRow key={id} blockId={id} compact={compact} />
             ))}
+            <div className="mx-2 mt-1 h-px bg-border" />
         </div>
     );
 });

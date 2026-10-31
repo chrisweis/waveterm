@@ -175,10 +175,10 @@ const WorkspaceElem = memo(() => {
                             />
                         )}
                         <ErrorBoundary>
+                            <DockSidebarSection compact={sidebarCompact} />
                             <div className="min-h-0 flex-1">
                                 <WorkspaceSidebar />
                             </div>
-                            <DockSidebarSection compact={sidebarCompact} />
                             <WorkspaceSidebarResizeHandle />
                         </ErrorBoundary>
                     </div>
