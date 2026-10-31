@@ -1312,6 +1312,35 @@ export class LayoutModel {
     }
 
     /**
+     * Remove a block's node from the layout without deleting the block (used when the block moves to the side dock).
+     * closeNode can't be used for this because it deletes the block through onNodeDelete.
+     * @param blockId The block whose node is removed.
+     */
+    detachBlock(blockId: string) {
+        const ephemeralNode = this.getter(this.ephemeralNode);
+        if (ephemeralNode?.data?.blockId === blockId) {
+            this.setter(this.ephemeralNode, undefined);
+            this.treeState.focusedNodeId = undefined;
+            this.updateTree(false);
+            this.setter(this.localTreeStateAtom, { ...this.treeState });
+            this.persistToBackend();
+            return;
+        }
+        const node = this.getNodeByBlockId(blockId);
+        if (node == null) {
+            return;
+        }
+        if (node.id === this.magnifiedNodeId) {
+            this.magnifyNodeToggle(node.id);
+        }
+        const deleteAction: LayoutTreeDeleteNodeAction = {
+            type: LayoutTreeActionType.DeleteNode,
+            nodeId: node.id,
+        };
+        this.treeReducer(deleteAction);
+    }
+
+    /**
      * Shorthand function for closing the focused node in a layout.
      */
     async closeFocusedNode() {

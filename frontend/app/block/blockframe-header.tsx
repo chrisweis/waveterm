@@ -19,9 +19,10 @@ import {
     WOS,
 } from "@/app/store/global";
 import { globalStore } from "@/app/store/jotaiStore";
-import { uxCloseBlock } from "@/app/store/keymodel";
+import { getStaticTabBlockCount, uxCloseBlock } from "@/app/store/keymodel";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 import { useWaveEnv } from "@/app/waveenv/waveenv";
+import { DockModel } from "@/app/workspace/dock-model";
 import { IconButton } from "@/element/iconbutton";
 import { NodeModel } from "@/layout/index";
 import * as util from "@/util/util";
@@ -41,12 +42,26 @@ function handleHeaderContextMenu(
     e.preventDefault();
     e.stopPropagation();
     const magnified = globalStore.get(nodeModel.isMagnified);
+    const canDock = getStaticTabBlockCount() > 1;
+    const dockSublabel = canDock ? undefined : "the last block in a tab stays in the layout";
     const menu: ContextMenuItem[] = [
         {
             label: magnified ? "Un-Magnify Block" : "Magnify Block",
             click: () => {
                 nodeModel.toggleMagnify();
             },
+        },
+        {
+            label: "Dock to Right",
+            sublabel: dockSublabel,
+            enabled: canDock,
+            click: () => DockModel.getInstance().dockBlock(blockId, "right"),
+        },
+        {
+            label: "Dock to Left",
+            sublabel: dockSublabel,
+            enabled: canDock,
+            click: () => DockModel.getInstance().dockBlock(blockId, "left"),
         },
         { type: "separator" },
         {

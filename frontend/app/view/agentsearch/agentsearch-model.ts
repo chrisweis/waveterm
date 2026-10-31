@@ -5,14 +5,55 @@ import { atoms, createBlock, getApi, getSettingsKeyAtom, globalStore, WOS } from
 import { BlockService, WorkspaceService } from "@/app/store/services";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
+import { DockModel } from "@/app/workspace/dock-model";
 import { fireAndForget, stringToBase64 } from "@/util/util";
 import * as jotai from "jotai";
 import { AgentSearchView } from "./agentsearch";
 
 const ShellStartTimeoutMs = 10000;
 const ShellPollMs = 150;
+const CacheKeyPrefix = "agentsearch:cache:";
+const MaxCachedSearches = 20;
 
 export type TermCmdMode = "run" | "paste";
+
+// Switching workspaces destroys this tab's renderer, and docking or undocking the widget remounts it, so the last
+// search is kept in localStorage (keyed by block) and restored instead of making the user search again.
+type CachedSearch = {
+    ts: number;
+    query: string;
+    submittedQuery: string;
+    result: AgentSearchUpdate;
+    error: string;
+};
+
+function readCache(blockId: string): CachedSearch {
+    try {
+        const raw = localStorage.getItem(CacheKeyPrefix + blockId);
+        return raw ? (JSON.parse(raw) as CachedSearch) : null;
+    } catch {
+        return null;
+    }
+}
+
+function writeCache(blockId: string, entry: CachedSearch) {
+    try {
+        localStorage.setItem(CacheKeyPrefix + blockId, JSON.stringify(entry));
+        const entries: { key: string; ts: number }[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key?.startsWith(CacheKeyPrefix)) {
+                entries.push({ key, ts: (JSON.parse(localStorage.getItem(key)) as CachedSearch)?.ts ?? 0 });
+            }
+        }
+        entries.sort((a, b) => b.ts - a.ts);
+        for (const old of entries.slice(MaxCachedSearches)) {
+            localStorage.removeItem(old.key);
+        }
+    } catch {
+        // storage full or unavailable: searching still works, the result just won't survive a remount
+    }
+}
 
 export type SearchRow = { kind: "wave"; wave: WaveSearchResult } | { kind: "folder"; folder: AgentFolderResult };
 
@@ -34,7 +75,6 @@ export class AgentSearchViewModel implements ViewModel {
 
     queryAtom = jotai.atom<string>("") as jotai.PrimitiveAtom<string>;
     submittedQueryAtom = jotai.atom<string>("") as jotai.PrimitiveAtom<string>;
-    scopeToWorkspaceAtom = jotai.atom<boolean>(false) as jotai.PrimitiveAtom<boolean>;
     searchSessionsAtom = jotai.atom<boolean>(true) as jotai.PrimitiveAtom<boolean>;
     searchMemoryAtom = jotai.atom<boolean>(true) as jotai.PrimitiveAtom<boolean>;
     resultAtom = jotai.atom<AgentSearchUpdate>(null) as jotai.PrimitiveAtom<AgentSearchUpdate>;
@@ -42,9 +82,13 @@ export class AgentSearchViewModel implements ViewModel {
     errorAtom = jotai.atom<string>(null) as jotai.PrimitiveAtom<string>;
     selectedKeyAtom = jotai.atom<string>(null) as jotai.PrimitiveAtom<string>;
     expandedAtom = jotai.atom<Set<string>>(new Set<string>()) as jotai.PrimitiveAtom<Set<string>>;
+    openCardsAtom = jotai.atom<Set<string>>(new Set<string>()) as jotai.PrimitiveAtom<Set<string>>;
+    scopeListOpenAtom = jotai.atom<boolean>(false) as jotai.PrimitiveAtom<boolean>;
     settingsOpenAtom = jotai.atom<boolean>(false) as jotai.PrimitiveAtom<boolean>;
     termCmdAtom = getSettingsKeyAtom("agentsearch:termcmd");
     termCmdModeAtom: jotai.Atom<TermCmdMode>;
+    scopeToWorkspaceAtom: jotai.Atom<boolean>;
+    compactAtom: jotai.Atom<boolean>;
 
     rowsAtom: jotai.Atom<SearchRow[]>;
 
@@ -57,6 +101,15 @@ export class AgentSearchViewModel implements ViewModel {
         this.termCmdModeAtom = jotai.atom((get) =>
             get(getSettingsKeyAtom("agentsearch:termcmdmode")) == "paste" ? "paste" : "run"
         );
+        this.scopeToWorkspaceAtom = jotai.atom((get) => !!get(atoms.workspace)?.meta?.["agentsearch:scoped"]);
+        this.compactAtom = jotai.atom((get) => !!get(atoms.workspace)?.meta?.["agentsearch:compact"]);
+        const cached = readCache(blockId);
+        if (cached != null) {
+            globalStore.set(this.queryAtom, cached.query ?? "");
+            globalStore.set(this.submittedQueryAtom, cached.submittedQuery ?? "");
+            globalStore.set(this.resultAtom, cached.result);
+            globalStore.set(this.errorAtom, cached.error);
+        }
         this.rowsAtom = jotai.atom((get) => {
             const res = get(this.resultAtom);
             if (res == null) {
@@ -140,18 +193,47 @@ export class AgentSearchViewModel implements ViewModel {
 
     setOption(optAtom: jotai.PrimitiveAtom<boolean>, value: boolean) {
         globalStore.set(optAtom, value);
+        this.rerunIfShowingResults();
+    }
+
+    setScopeToWorkspace(scoped: boolean) {
+        this.setWorkspacePref({ "agentsearch:scoped": scoped || null });
+        // the workspace meta update arrives after runSearch would read it, so the new value is passed along
+        this.rerunIfShowingResults(scoped);
+    }
+
+    setCompact(compact: boolean) {
+        globalStore.set(this.openCardsAtom, new Set<string>());
+        this.setWorkspacePref({ "agentsearch:compact": compact || null });
+    }
+
+    toggleScopeList() {
+        globalStore.set(this.scopeListOpenAtom, !globalStore.get(this.scopeListOpenAtom));
+    }
+
+    setWorkspacePref(meta: MetaType) {
+        const wsId = globalStore.get(atoms.workspaceId);
+        if (!wsId) {
+            return;
+        }
+        fireAndForget(() => RpcApi.SetMetaCommand(TabRpcClient, { oref: WOS.makeORef("workspace", wsId), meta }));
+    }
+
+    rerunIfShowingResults(scopeOverride?: boolean) {
         if (globalStore.get(this.resultAtom) == null) {
             return;
         }
-        fireAndForget(() => this.runSearch());
+        fireAndForget(() => this.runSearch(scopeOverride));
     }
 
-    async runSearch() {
+    async runSearch(scopeOverride?: boolean) {
         const query = globalStore.get(this.queryAtom).trim();
         if (query == "") {
             this.cancelSearch();
             globalStore.set(this.resultAtom, null);
             globalStore.set(this.submittedQueryAtom, "");
+            globalStore.set(this.errorAtom, null);
+            this.saveCache();
             return;
         }
         const epoch = ++this.searchEpoch;
@@ -160,10 +242,11 @@ export class AgentSearchViewModel implements ViewModel {
         globalStore.set(this.errorAtom, null);
         globalStore.set(this.selectedKeyAtom, null);
         globalStore.set(this.expandedAtom, new Set<string>());
+        globalStore.set(this.openCardsAtom, new Set<string>());
         const data: CommandAgentSearchData = {
             query,
             workspaceid: globalStore.get(atoms.workspaceId),
-            scopetoworkspace: globalStore.get(this.scopeToWorkspaceAtom),
+            scopetoworkspace: scopeOverride ?? globalStore.get(this.scopeToWorkspaceAtom),
             searchsessions: globalStore.get(this.searchSessionsAtom),
             searchmemory: globalStore.get(this.searchMemoryAtom),
         };
@@ -192,8 +275,19 @@ export class AgentSearchViewModel implements ViewModel {
         } finally {
             if (epoch == this.searchEpoch) {
                 globalStore.set(this.searchingAtom, false);
+                this.saveCache();
             }
         }
+    }
+
+    saveCache() {
+        writeCache(this.blockId, {
+            ts: Date.now(),
+            query: globalStore.get(this.queryAtom),
+            submittedQuery: globalStore.get(this.submittedQueryAtom),
+            result: globalStore.get(this.resultAtom),
+            error: globalStore.get(this.errorAtom),
+        });
     }
 
     moveSelection(delta: number) {
@@ -216,10 +310,22 @@ export class AgentSearchViewModel implements ViewModel {
         }
         if (row.kind == "wave") {
             this.switchTo(row.wave);
+        } else if (globalStore.get(this.compactAtom)) {
+            this.toggleCard(rowKey(row));
         } else {
             this.toggleExpanded(rowKey(row));
         }
         return true;
+    }
+
+    toggleCard(key: string) {
+        const next = new Set(globalStore.get(this.openCardsAtom));
+        if (next.has(key)) {
+            next.delete(key);
+        } else {
+            next.add(key);
+        }
+        globalStore.set(this.openCardsAtom, next);
     }
 
     toggleExpanded(key: string) {
@@ -232,7 +338,16 @@ export class AgentSearchViewModel implements ViewModel {
         globalStore.set(this.expandedAtom, next);
     }
 
+    // Results open things in the tab behind a docked search panel, so the panel steps aside unless it's pinned.
+    afterAction() {
+        const dock = DockModel.getInstance();
+        if (dock.isDocked(this.blockId)) {
+            dock.collapseIfUnpinned();
+        }
+    }
+
     switchTo(res: WaveSearchResult) {
+        this.afterAction();
         const curWsId = globalStore.get(atoms.workspaceId);
         if (res.workspaceid == curWsId) {
             if (res.tabid) {
@@ -251,6 +366,7 @@ export class AgentSearchViewModel implements ViewModel {
     }
 
     openFiles(path: string) {
+        this.afterAction();
         fireAndForget(() => createBlock({ meta: { view: "preview", file: path } }));
     }
 
@@ -263,6 +379,7 @@ export class AgentSearchViewModel implements ViewModel {
     }
 
     openTerminalWithCmd(path: string, cmd: string) {
+        this.afterAction();
         const mode = globalStore.get(this.termCmdModeAtom);
         fireAndForget(async () => {
             const initScripts = cmd ? makeInitScripts(cmd, mode) : {};

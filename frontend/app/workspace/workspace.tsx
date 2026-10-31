@@ -13,6 +13,7 @@ import { TabContent } from "@/app/tab/tabcontent";
 import { VTabBar } from "@/app/tab/vtabbar";
 import { WorkspaceSidebar, WorkspaceSidebarResizeHandle } from "@/app/tab/workspacesidebar";
 import { WorkspaceSidebarModel } from "@/app/tab/workspacesidebar-model";
+import { DockPanel, DockStrip } from "@/app/workspace/dock";
 import { Widgets } from "@/app/workspace/widgets";
 import { WorkspaceLayoutModel } from "@/app/workspace/workspace-layout-model";
 import { atoms, getApi, getSettingsKeyAtom } from "@/store/global";
@@ -226,8 +227,17 @@ const WorkspaceElem = memo(() => {
                                 <CenteredDiv>No Active Tab</CenteredDiv>
                             ) : (
                                 <div className="flex flex-row h-full">
-                                    <TabContent key={tabId} tabId={tabId} noTopPadding={showLeftTabBar && isMacOS()} />
-                                    {widgetsSidebarVisible && <Widgets />}
+                                    <DockStrip side="left" />
+                                    <div className="relative flex min-w-0 flex-grow flex-row">
+                                        <TabContent
+                                            key={tabId}
+                                            tabId={tabId}
+                                            noTopPadding={showLeftTabBar && isMacOS()}
+                                        />
+                                        <DockPanel side="left" />
+                                        <DockPanel side="right" />
+                                    </div>
+                                    {widgetsSidebarVisible ? <Widgets /> : <DockStrip side="right" />}
                                 </div>
                             )}
                         </Panel>

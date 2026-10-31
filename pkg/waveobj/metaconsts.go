@@ -105,6 +105,14 @@ const (
 	MetaKey_LayoutWorkspaceSidebarWidth      = "layout:workspacesidebarwidth"
 	MetaKey_LayoutWorkspaceOrder             = "layout:workspaceorder"
 
+	MetaKey_DockBlockIds                     = "dock:blockids"
+	MetaKey_DockPinned                       = "dock:pinned"
+	MetaKey_DockSide                         = "dock:side"
+	MetaKey_DockWidth                        = "dock:width"
+
+	MetaKey_AgentSearchScoped                = "agentsearch:scoped"
+	MetaKey_AgentSearchCompact               = "agentsearch:compact"
+
 	MetaKey_ActivityScore                    = "activity:score"
 	MetaKey_ActivityTs                       = "activity:ts"
 

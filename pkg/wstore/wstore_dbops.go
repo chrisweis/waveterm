@@ -385,6 +385,15 @@ func DBFindTabForBlockId(ctx context.Context, blockId string) (string, error) {
 				iterNum++
 				continue
 			}
+			// docked blocks belong to the workspace and are shown on every tab, so callers that need a tab
+			// (wsh commands creating blocks, controller env) act on whichever tab is active
+			if oref.OType == "workspace" {
+				activeTabId := tx.GetString(`SELECT json_extract(data, '$.activetabid') FROM db_workspace WHERE oid = ?`, oref.OID)
+				if activeTabId == "" {
+					return "", fmt.Errorf("workspace %s has no active tab", oref.OID)
+				}
+				return activeTabId, nil
+			}
 			return "", fmt.Errorf("bad parent oref type: %v", oref.OType)
 		}
 	})

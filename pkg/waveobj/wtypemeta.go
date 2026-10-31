@@ -108,6 +108,16 @@ type MetaTSType struct {
 	LayoutWorkspaceSidebarWidth   int      `json:"layout:workspacesidebarwidth,omitempty"`
 	LayoutWorkspaceOrder          []string `json:"layout:workspaceorder,omitempty"`
 
+	// side dock: blockids and pinned on workspaces; side and width on each docked block
+	DockBlockIds []string `json:"dock:blockids,omitempty"`
+	DockPinned   bool     `json:"dock:pinned,omitempty"`
+	DockSide     string   `json:"dock:side,omitempty"`
+	DockWidth    int      `json:"dock:width,omitempty"`
+
+	// search widget preferences, on workspaces so every search widget in the workspace shares them
+	AgentSearchScoped  bool `json:"agentsearch:scoped,omitempty"`
+	AgentSearchCompact bool `json:"agentsearch:compact,omitempty"`
+
 	// recency glow, on both tabs and workspaces. Score is an exponentially-decayed usage count and
 	// is only meaningful together with the timestamp it was last decayed to.
 	ActivityScore float64 `json:"activity:score,omitempty"`

@@ -1213,6 +1213,12 @@ declare global {
         "layout:workspacesidebarcompact"?: boolean;
         "layout:workspacesidebarwidth"?: number;
         "layout:workspaceorder"?: string[];
+        "dock:blockids"?: string[];
+        "dock:pinned"?: boolean;
+        "dock:side"?: string;
+        "dock:width"?: number;
+        "agentsearch:scoped"?: boolean;
+        "agentsearch:compact"?: boolean;
         "activity:score"?: number;
         "activity:ts"?: number;
         "waveai:panelopen"?: boolean;

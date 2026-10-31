@@ -82,9 +82,26 @@ export class ObjectServiceType {
         return callBackendService(this?.waveEnv, "object", "CreateBlock", Array.from(arguments))
     }
 
+    // create a block directly in the active workspace's dock on the given side (left or right)
+    // @returns blockId (and object updates)
+    CreateDockedBlock(blockDef: BlockDef, rtOpts: RuntimeOpts, side: string): Promise<string> {
+        return callBackendService(this?.waveEnv, "object", "CreateDockedBlock", Array.from(arguments))
+    }
+
     // @returns object updates
     DeleteBlock(blockId: string): Promise<void> {
         return callBackendService(this?.waveEnv, "object", "DeleteBlock", Array.from(arguments))
+    }
+
+    // @returns object updates
+    DeleteDockedBlock(blockId: string): Promise<void> {
+        return callBackendService(this?.waveEnv, "object", "DeleteDockedBlock", Array.from(arguments))
+    }
+
+    // move a block from the active tab into its workspace's dock on the given side (left or right)
+    // @returns object updates
+    DockBlock(blockId: string, side: string): Promise<void> {
+        return callBackendService(this?.waveEnv, "object", "DockBlock", Array.from(arguments))
     }
 
     // get wave object by oref
@@ -95,6 +112,12 @@ export class ObjectServiceType {
     // @returns objects
     GetObjects(orefs: string[]): Promise<WaveObj[]> {
         return callBackendService(this?.waveEnv, "object", "GetObjects", Array.from(arguments))
+    }
+
+    // move a docked block into the active tab (the caller adds it to the layout)
+    // @returns object updates
+    UndockBlock(blockId: string): Promise<void> {
+        return callBackendService(this?.waveEnv, "object", "UndockBlock", Array.from(arguments))
     }
 
     // @returns object updates

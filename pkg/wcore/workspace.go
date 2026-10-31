@@ -141,6 +141,12 @@ func DeleteWorkspace(ctx context.Context, workspaceId string, force bool) (bool,
 			return false, "", fmt.Errorf("error closing tab: %w", err)
 		}
 	}
+	for _, blockId := range workspace.Meta.GetStringArray(waveobj.MetaKey_DockBlockIds) {
+		err := DeleteBlock(ctx, blockId, false)
+		if err != nil {
+			log.Printf("error deleting docked block %s: %v\n", blockId, err)
+		}
+	}
 	windowId, _ := wstore.DBFindWindowForWorkspaceId(ctx, workspaceId)
 	err = wstore.DBDelete(ctx, waveobj.OType_Workspace, workspaceId)
 	if err != nil {

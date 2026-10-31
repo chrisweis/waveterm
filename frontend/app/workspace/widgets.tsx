@@ -4,6 +4,8 @@
 import { Tooltip } from "@/app/element/tooltip";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 import { useWaveEnv, WaveEnv, WaveEnvSubset } from "@/app/waveenv/waveenv";
+import { DockEntries } from "@/app/workspace/dock";
+import { DockModel } from "@/app/workspace/dock-model";
 import { shouldIncludeWidgetForWorkspace } from "@/app/workspace/widgetfilter";
 import { modalsModel } from "@/store/modalmodel";
 import { fireAndForget, isBlank, makeIconClass } from "@/util/util";
@@ -85,17 +87,39 @@ const Widget = memo(({ widget, mode, env }: WidgetPropsType) => {
             )}
             divOnClick={() => handleWidgetSelect(widget, env)}
         >
-            <div style={{ color: widget.color }}>
-                <i className={makeIconClass(widget.icon, true, { defaultIcon: "browser" })}></i>
-            </div>
-            {mode === "normal" && !isBlank(widget.label) ? (
-                <div
-                    ref={labelRef}
-                    className="text-xxs mt-0.5 w-full px-0.5 text-center whitespace-nowrap overflow-hidden text-ellipsis"
-                >
-                    {widget.label}
+            <div
+                className="flex w-full flex-col items-center"
+                onContextMenu={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    env.showContextMenu(
+                        [
+                            { label: "Open in Tab Layout", click: () => handleWidgetSelect(widget, env) },
+                            {
+                                label: "Open Docked to Right",
+                                click: () => DockModel.getInstance().createDockedBlock(widget.blockdef, "right"),
+                            },
+                            {
+                                label: "Open Docked to Left",
+                                click: () => DockModel.getInstance().createDockedBlock(widget.blockdef, "left"),
+                            },
+                        ],
+                        e
+                    );
+                }}
+            >
+                <div style={{ color: widget.color }}>
+                    <i className={makeIconClass(widget.icon, true, { defaultIcon: "browser" })}></i>
                 </div>
-            ) : null}
+                {mode === "normal" && !isBlank(widget.label) ? (
+                    <div
+                        ref={labelRef}
+                        className="text-xxs mt-0.5 w-full px-0.5 text-center whitespace-nowrap overflow-hidden text-ellipsis"
+                    >
+                        {widget.label}
+                    </div>
+                ) : null}
+            </div>
         </Tooltip>
     );
 });
@@ -462,6 +486,7 @@ const Widgets = memo(() => {
                 className="flex flex-col w-12 overflow-hidden py-1 -ml-1 select-none shrink-0"
                 onContextMenu={handleWidgetsBarContextMenu}
             >
+                <DockEntries mode={mode} />
                 {mode === "supercompact" ? (
                     <>
                         <div className="grid grid-cols-2 gap-0 w-full">
@@ -588,6 +613,7 @@ const Widgets = memo(() => {
                 ref={measurementRef}
                 className="flex flex-col w-12 py-1 -ml-1 select-none absolute -z-10 opacity-0 pointer-events-none"
             >
+                <DockEntries mode="normal" />
                 {widgets?.map((data, idx) => (
                     <Widget key={`measurement-widget-${idx}`} widget={data} mode="normal" env={env} />
                 ))}

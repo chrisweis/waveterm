@@ -217,6 +217,14 @@ func deleteBlockObj(ctx context.Context, blockId string) (int, error) {
 					wstore.DBUpdate(tx.Context(), tab)
 					parentBlockCount = len(tab.BlockIds)
 				}
+			} else if parentORef.OType == waveobj.OType_Workspace {
+				ws, _ := wstore.DBGet[*waveobj.Workspace](tx.Context(), parentORef.OID)
+				if ws != nil {
+					dockIds := utilfn.RemoveElemFromSlice(ws.Meta.GetStringArray(waveobj.MetaKey_DockBlockIds), blockId)
+					setDockBlockIds(ws, dockIds)
+					wstore.DBUpdate(tx.Context(), ws)
+					parentBlockCount = len(dockIds)
+				}
 			} else if parentORef.OType == waveobj.OType_Block {
 				parentBlock, _ := wstore.DBGet[*waveobj.Block](tx.Context(), parentORef.OID)
 				if parentBlock != nil {

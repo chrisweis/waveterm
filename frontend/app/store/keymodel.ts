@@ -789,6 +789,7 @@ export {
     disableGlobalKeybindings,
     enableGlobalKeybindings,
     getSimpleControlShiftAtom,
+    getStaticTabBlockCount,
     globalRefocus,
     globalRefocusWithTimeout,
     registerBuilderGlobalKeys,
