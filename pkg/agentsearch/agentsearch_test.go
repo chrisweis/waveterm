@@ -122,6 +122,36 @@ func TestPathInScope(t *testing.T) {
 	}
 }
 
+func TestFolderInWorkspaceScope(t *testing.T) {
+	home := homeDir()
+	sandbox := filepath.Join(home, "dev", "sandbox")
+	homelab := filepath.Join(sandbox, "claude-homelab")
+	waveterm := filepath.Join(sandbox, "waveterm")
+	current := []string{sandbox, waveterm}
+	others := [][]string{{homelab}}
+	cases := []struct {
+		folder string
+		want   bool
+	}{
+		// another workspace has a tab right in this repo, which beats the current workspace's container tab
+		{homelab, false},
+		{filepath.Join(homelab, "sub"), false},
+		// repos under the container tab that no other workspace claims stay in scope
+		{filepath.Join(sandbox, "claude-hardware"), true},
+		{waveterm, true},
+		{filepath.Join(home, "elsewhere"), false},
+	}
+	for _, c := range cases {
+		if got := folderInWorkspaceScope(c.folder, current, others); got != c.want {
+			t.Errorf("folderInWorkspaceScope(%q) = %v, want %v", c.folder, got, c.want)
+		}
+	}
+	// a tie keeps the folder in both workspaces
+	if !folderInWorkspaceScope(homelab, []string{homelab}, [][]string{{homelab}}) {
+		t.Errorf("equally close tabs should keep the folder in scope")
+	}
+}
+
 func TestSnippet(t *testing.T) {
 	text := strings.Repeat("a ", 100) + "Needle\n\n  here" + strings.Repeat(" b", 100)
 	n, snip := countAndSnippet(text, "needle")

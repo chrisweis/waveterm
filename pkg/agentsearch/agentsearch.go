@@ -148,12 +148,35 @@ func runSearch(ctx context.Context, data wshrpc.CommandAgentSearchData, ch chan 
 	}
 	workspaces := loadWorkspaces(ctx, data.WorkspaceId)
 	waveResults := searchWave(workspaces, query, data.WorkspaceId, data.ScopeToWorkspace)
+	var otherWorkspacePaths [][]string
+	for _, wi := range workspaces {
+		if wi.ws.OID == data.WorkspaceId {
+			continue
+		}
+		var paths []string
+		for _, ti := range wi.tabs {
+			paths = append(paths, ti.paths...)
+		}
+		otherWorkspacePaths = append(otherWorkspacePaths, paths)
+	}
 	files := collectClaudeFiles(data.SearchSessions, data.SearchMemory)
 	var sessionCount, memoryCount int
 	var scopedFiles []searchFile
+	inScope := make(map[string]bool)
 	for _, f := range files {
-		if data.ScopeToWorkspace && (f.global || !pathInScope(f.folder, scopePaths)) {
-			continue
+		if data.ScopeToWorkspace {
+			if f.global {
+				continue
+			}
+			fk := folderKey(f.folder)
+			ok, seen := inScope[fk]
+			if !seen {
+				ok = folderInWorkspaceScope(f.folder, scopePaths, otherWorkspacePaths)
+				inScope[fk] = ok
+			}
+			if !ok {
+				continue
+			}
 		}
 		if f.isSession {
 			sessionCount++
@@ -162,7 +185,7 @@ func runSearch(ctx context.Context, data wshrpc.CommandAgentSearchData, ch chan 
 		}
 		scopedFiles = append(scopedFiles, f)
 	}
-	state := &searchState{folders: make(map[string]*folderAgg), tabs: makeTabRefs(workspaces, data.WorkspaceId)}
+	state := &searchState{folders: make(map[string]*folderAgg), tabs: makeTabRefs(workspaces, data.WorkspaceId, data.ScopeToWorkspace)}
 	makeUpdate := func(done bool) wshrpc.AgentSearchUpdate {
 		return wshrpc.AgentSearchUpdate{
 			WaveResults:   waveResults,
@@ -293,18 +316,50 @@ func isUnder(child string, parent string) bool {
 // subfolder of a tab's path, and a session run in the repo root while a tab is cd'ed into a subfolder.
 // The upward direction excludes the home dir and volume roots, which would otherwise match everything.
 func pathInScope(folder string, scopePaths []string) bool {
+	return scopeDistance(folder, scopePaths) >= 0
+}
+
+// scopeDistance is how many directory levels separate folder from the nearest of paths that pathInScope accepts,
+// or -1 when none match.
+func scopeDistance(folder string, paths []string) int {
 	fk := folderKey(folder)
 	homeKey := folderKey(homeDir())
-	for _, sp := range scopePaths {
+	best := -1
+	for _, sp := range paths {
 		sk := folderKey(sp)
-		if isUnder(fk, sk) {
-			return true
+		if !isUnder(fk, sk) && (fk == homeKey || isVolumeRoot(fk) || !isUnder(sk, fk)) {
+			continue
 		}
-		if fk != homeKey && !isVolumeRoot(fk) && isUnder(sk, fk) {
-			return true
+		d := pathDepth(fk) - pathDepth(sk)
+		if d < 0 {
+			d = -d
+		}
+		if best < 0 || d < best {
+			best = d
 		}
 	}
-	return false
+	return best
+}
+
+func pathDepth(key string) int {
+	return strings.Count(strings.TrimRight(key, string(filepath.Separator)), string(filepath.Separator))
+}
+
+// folderInWorkspaceScope keeps a folder in the current workspace's scope unless another workspace has a tab
+// strictly closer to it. A tab parked on a container folder (e.g. C:\Dev\Dev-Sandbox) would otherwise pull in
+// every repo underneath it, including ones that have their own tab in a different workspace.
+func folderInWorkspaceScope(folder string, currentPaths []string, otherWorkspacePaths [][]string) bool {
+	d := scopeDistance(folder, currentPaths)
+	if d < 0 {
+		return false
+	}
+	for _, other := range otherWorkspacePaths {
+		od := scopeDistance(folder, other)
+		if od >= 0 && od < d {
+			return false
+		}
+	}
+	return true
 }
 
 func isVolumeRoot(p string) bool {

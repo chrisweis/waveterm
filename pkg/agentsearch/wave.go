@@ -199,9 +199,12 @@ type tabRef struct {
 	paths []string
 }
 
-func makeTabRefs(workspaces []workspaceInfo, currentWsId string) []tabRef {
+func makeTabRefs(workspaces []workspaceInfo, currentWsId string, currentOnly bool) []tabRef {
 	var rtn []tabRef
 	for _, wi := range workspaces {
+		if currentOnly && wi.ws.OID != currentWsId {
+			continue
+		}
 		for _, ti := range wi.tabs {
 			if len(ti.paths) == 0 {
 				continue
