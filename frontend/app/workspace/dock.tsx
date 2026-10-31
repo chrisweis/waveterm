@@ -381,8 +381,81 @@ export const DockEntries = memo(({ mode }: { mode: WidgetBarMode }) => {
 });
 DockEntries.displayName = "DockEntries";
 
-// A slim strip on the given edge of the tab area. The left side always uses it; the right side only when the
-// widgets bar is turned off, so docked panels still have something to open them from.
+const DockSidebarRow = memo(({ blockId, compact }: { blockId: string; compact: boolean }) => {
+    const model = DockModel.getInstance();
+    const openIds = useAtomValue(model.openIdsAtom);
+    const block = useDockedBlock(blockId);
+    const widgets = useWidgetList();
+    if (block == null) {
+        return null;
+    }
+    const info = getDockEntryInfo(block, widgets);
+    const isOpen = openIds.left == blockId;
+    return (
+        <Tooltip
+            content={`${info.label}: click to ${isOpen ? "collapse" : "expand"}; right-click for options`}
+            placement="right"
+            openDelay={compact ? 0 : 600}
+            hideOnClick
+            divClassName={cn(
+                "dock-entry relative flex h-8 cursor-pointer items-center rounded-md transition-colors select-none hover:bg-hover",
+                compact ? "justify-center" : "gap-2.5 px-2",
+                isOpen ? "bg-hover text-primary" : "text-secondary"
+            )}
+            divOnClick={() => model.toggle(blockId)}
+        >
+            <div
+                className={cn("flex min-w-0 flex-1 items-center", compact ? "justify-center" : "gap-2.5")}
+                onContextMenu={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    showDockedBlockMenu(blockId, e);
+                }}
+            >
+                {isOpen && <span className="absolute top-1.5 bottom-1.5 left-0 w-0.5 rounded-full bg-accent" />}
+                <i
+                    className={cn(makeIconClass(info.icon, true, { defaultIcon: "browser" }), "shrink-0 text-[12px]")}
+                    style={{ color: info.color }}
+                />
+                {!compact && <div className="truncate text-[12px]">{info.label}</div>}
+                {!compact && (
+                    <i
+                        className={cn(
+                            "fa fa-solid ml-auto shrink-0 text-[9px] text-muted",
+                            isOpen ? "fa-angles-left" : "fa-angles-right"
+                        )}
+                    />
+                )}
+            </div>
+        </Tooltip>
+    );
+});
+DockSidebarRow.displayName = "DockSidebarRow";
+
+// Left-docked entries sit in the workspace sidebar's column, under the workspace list, as their own card, so they
+// take no extra width.
+export const DockSidebarSection = memo(({ compact }: { compact: boolean }) => {
+    const leftIds = useAtomValue(DockModel.getInstance().sideIdsAtoms.left);
+    if (leftIds.length == 0) {
+        return null;
+    }
+    return (
+        <div className="mx-1.5 mb-1.5 flex shrink-0 flex-col gap-0.5 rounded-md border border-border bg-white/[0.03] p-1">
+            {!compact && (
+                <div className="px-2 pt-0.5 pb-1 text-[10px] font-semibold tracking-wide text-muted uppercase">
+                    Docked
+                </div>
+            )}
+            {leftIds.map((id) => (
+                <DockSidebarRow key={id} blockId={id} compact={compact} />
+            ))}
+        </div>
+    );
+});
+DockSidebarSection.displayName = "DockSidebarSection";
+
+// A slim strip on the given edge of the tab area, used only when that side's usual home (the workspace sidebar on
+// the left, the widgets bar on the right) is turned off, so docked panels still have something to open them from.
 export const DockStrip = memo(({ side }: { side: DockSide }) => {
     const ids = useAtomValue(DockModel.getInstance().sideIdsAtoms[side]);
     if (ids.length == 0) {

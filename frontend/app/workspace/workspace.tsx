@@ -13,7 +13,7 @@ import { TabContent } from "@/app/tab/tabcontent";
 import { VTabBar } from "@/app/tab/vtabbar";
 import { WorkspaceSidebar, WorkspaceSidebarResizeHandle } from "@/app/tab/workspacesidebar";
 import { WorkspaceSidebarModel } from "@/app/tab/workspacesidebar-model";
-import { DockPanel, DockStrip } from "@/app/workspace/dock";
+import { DockPanel, DockSidebarSection, DockStrip } from "@/app/workspace/dock";
 import { Widgets } from "@/app/workspace/widgets";
 import { WorkspaceLayoutModel } from "@/app/workspace/workspace-layout-model";
 import { atoms, getApi, getSettingsKeyAtom } from "@/store/global";
@@ -54,6 +54,7 @@ const WorkspaceElem = memo(() => {
     const showLeftTabBar = tabBarPosition === "left";
     const sidebarEnabled = useAtomValue(getSettingsKeyAtom("app:workspacesidebar")) ?? false;
     const sidebarWidth = useAtomValue(WorkspaceSidebarModel.getInstance().widthAtom);
+    const sidebarCompact = useAtomValue(WorkspaceSidebarModel.getInstance().compactAtom);
     const showWorkspaceSidebar = sidebarEnabled && !isBuilderWindow();
     const isFullScreen = useAtomValue(atoms.isFullScreen);
     // With app:tabbar=left on macOS there is no top TabBar, and VTabBar carries the traffic-light
@@ -177,6 +178,7 @@ const WorkspaceElem = memo(() => {
                             <div className="min-h-0 flex-1">
                                 <WorkspaceSidebar />
                             </div>
+                            <DockSidebarSection compact={sidebarCompact} />
                             <WorkspaceSidebarResizeHandle />
                         </ErrorBoundary>
                     </div>
@@ -227,7 +229,7 @@ const WorkspaceElem = memo(() => {
                                 <CenteredDiv>No Active Tab</CenteredDiv>
                             ) : (
                                 <div className="flex flex-row h-full">
-                                    <DockStrip side="left" />
+                                    {!showWorkspaceSidebar && <DockStrip side="left" />}
                                     <div className="relative flex min-w-0 flex-grow flex-row">
                                         <TabContent
                                             key={tabId}
