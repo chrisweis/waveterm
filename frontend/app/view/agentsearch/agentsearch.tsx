@@ -607,7 +607,7 @@ export const AgentSearchView: React.FC<ViewComponentProps<AgentSearchViewModel>>
                 <div className="flex items-center gap-1.5">
                     <label
                         className="flex cursor-pointer items-center gap-1.5 text-[12px] text-primary"
-                        title="Only search folders this workspace's tabs are in (or above or below). A folder another workspace has a closer tab in belongs to that workspace instead. Remembered for this workspace."
+                        title="Only search folders this workspace's tabs are in, and folders inside them (plus a repo's root when a tab is in a subfolder of it). A folder another workspace has a closer tab in belongs to that workspace instead. Remembered for this workspace."
                     >
                         <input
                             type="checkbox"

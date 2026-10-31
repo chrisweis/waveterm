@@ -242,7 +242,7 @@ func tabsForFolder(folder string, tabs []tabRef) []wshrpc.WaveSearchResult {
 		matchedPath := ""
 		for _, p := range t.paths {
 			pk := folderKey(p)
-			if isUnder(pk, fk) || (pk != homeKey && !isVolumeRoot(pk) && isUnder(fk, pk)) {
+			if (isUnder(pk, fk) && inSameRepo(folder, p)) || (pk != homeKey && !isVolumeRoot(pk) && isUnder(fk, pk)) {
 				matchedPath = p
 				break
 			}

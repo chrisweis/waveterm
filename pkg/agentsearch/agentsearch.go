@@ -327,7 +327,7 @@ func scopeDistance(folder string, paths []string) int {
 	best := -1
 	for _, sp := range paths {
 		sk := folderKey(sp)
-		if !isUnder(fk, sk) && (fk == homeKey || isVolumeRoot(fk) || !isUnder(sk, fk)) {
+		if !isUnder(fk, sk) && (fk == homeKey || isVolumeRoot(fk) || !isUnder(sk, fk) || !inSameRepo(folder, sp)) {
 			continue
 		}
 		d := pathDepth(fk) - pathDepth(sk)
@@ -339,6 +339,41 @@ func scopeDistance(folder string, paths []string) int {
 		}
 	}
 	return best
+}
+
+// inSameRepo says whether a folder above a tab's path still belongs with that tab: only when the folder is inside
+// the tab's git repo (a session at the repo root, the tab cd'ed into src/). Without this, a container folder like
+// C:\Dev\Dev-Sandbox would match every repo under it that has a tab open.
+func inSameRepo(folder string, tabPath string) bool {
+	root := repoRoot(tabPath)
+	if root == "" {
+		return false
+	}
+	return isUnder(folderKey(folder), folderKey(root))
+}
+
+// Cached for the life of the process: repos are rarely created or removed, and this runs for every folder and tab
+// in every search. A folder that becomes a repo is picked up after a restart.
+var repoRootCache sync.Map
+
+func repoRoot(dir string) string {
+	start := normalizePath(dir)
+	key := folderKey(start)
+	if v, ok := repoRootCache.Load(key); ok {
+		return v.(string)
+	}
+	root := ""
+	for d := start; d != ""; d = filepath.Dir(d) {
+		if _, err := os.Stat(filepath.Join(d, ".git")); err == nil {
+			root = d
+			break
+		}
+		if isVolumeRoot(d) {
+			break
+		}
+	}
+	repoRootCache.Store(key, root)
+	return root
 }
 
 func pathDepth(key string) int {

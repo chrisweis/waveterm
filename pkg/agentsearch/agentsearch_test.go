@@ -100,7 +100,9 @@ func TestSearchWindowsPathQuery(t *testing.T) {
 
 func TestPathInScope(t *testing.T) {
 	home := homeDir()
-	repo := filepath.Join(home, "repo")
+	base := t.TempDir()
+	repo := makeTestRepo(t, base, "repo")
+	plain := filepath.Join(base, "plain", "sub")
 	cases := []struct {
 		folder string
 		scope  string
@@ -108,9 +110,14 @@ func TestPathInScope(t *testing.T) {
 	}{
 		{repo, repo, true},
 		{filepath.Join(repo, "sub"), repo, true},
+		// a session at the repo root while the tab is in a subfolder of the same repo
 		{repo, filepath.Join(repo, "sub"), true},
-		{filepath.Join(home, "repo2"), repo, false},
-		{home, repo, false},
+		{filepath.Join(base, "repo2"), repo, false},
+		// a container folder above a repo isn't covered by a tab inside the repo
+		{base, repo, false},
+		// nor by a tab in a folder that isn't a repo at all
+		{filepath.Dir(plain), plain, false},
+		{home, filepath.Join(home, "repo"), false},
 	}
 	for _, c := range cases {
 		if got := pathInScope(c.folder, []string{c.scope}); got != c.want {
@@ -193,7 +200,8 @@ func TestWalkEncoded(t *testing.T) {
 
 func TestTabsForFolder(t *testing.T) {
 	home := homeDir()
-	repo := filepath.Join(home, "repo")
+	base := t.TempDir()
+	repo := makeTestRepo(t, base, "repo")
 	tabs := []tabRef{
 		{res: wshrpc.WaveSearchResult{TabId: "other"}, paths: []string{filepath.Join(home, "elsewhere")}},
 		{res: wshrpc.WaveSearchResult{TabId: "sub"}, paths: []string{home, filepath.Join(repo, "sub")}},
@@ -202,4 +210,15 @@ func TestTabsForFolder(t *testing.T) {
 	if len(got) != 1 || got[0].TabId != "sub" || got[0].Path != filepath.Join(repo, "sub") {
 		t.Fatalf("tabsForFolder = %+v", got)
 	}
+	if got := tabsForFolder(base, tabs); len(got) != 0 {
+		t.Fatalf("a container folder should not list tabs open inside its repos, got %+v", got)
+	}
+}
+
+func makeTestRepo(t *testing.T, base string, name string) string {
+	repo := filepath.Join(base, name)
+	if err := os.MkdirAll(filepath.Join(repo, ".git"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	return repo
 }
