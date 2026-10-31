@@ -22,6 +22,7 @@ import { base64ToArray, fireAndForget } from "@/util/util";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import { SerializeAddon } from "@xterm/addon-serialize";
+import { UnicodeGraphemesAddon } from "@xterm/addon-unicode-graphemes";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import * as TermTypes from "@xterm/xterm";
@@ -150,6 +151,10 @@ export class TermWrap {
         this.terminal.loadAddon(this.searchAddon);
         this.terminal.loadAddon(this.fitAddon);
         this.terminal.loadAddon(this.serializeAddon);
+        // xterm.js defaults to Unicode 6 widths, which count most emoji (and emoji with a VS16 selector, like ☀️) as one
+        // column. TUIs such as Claude Code count them as two, so their partial redraws land a column off and leave
+        // garbled text until a resize forces a full repaint. The graphemes provider matches their widths.
+        this.terminal.loadAddon(new UnicodeGraphemesAddon());
         this.terminal.loadAddon(
             new WebLinksAddon(
                 (e, uri) => {
