@@ -57,6 +57,45 @@ This is a personal fork of [wavetermdev/waveterm](https://github.com/wavetermdev
   - **Blur and Escape fire no `input` event.** Both set `innerText` programmatically, and the rename round-trips through an RPC that never re-renders `TabBar`, so nothing unwinds the rename-expand. `onBlur` on the tabs wrapper (which bubbles, unlike `blur`) is what ends it, deferred a frame so `.focused` is gone before widths are recomputed.
   - **The sidebar must carry its own "Save workspace".** `wcore.ListWorkspaces` filters out workspaces with no name/icon/colour and the sidebar replaces the switcher outright, so without it a fresh window sits on an unnamed workspace that appears in no list and cannot be named.
 
+- **Move a tab to another workspace** — tab right-click → **Move to Workspace**. `wcore.MoveTab` only reparents the tab between the two workspaces' `TabIds`; blocks, layout and controllers are untouched, so running terminals survive the move. It fixes the source's active tab and creates a replacement tab if the last one left. The Electron window queue tears the tab's view down in the source window and activates it in the destination window when that workspace is open. Falls back to `GetWorkspace` when the WOS atom for a target workspace is still loading, or the menu shows gaps.
+
+- **Draggable gap in a full tab bar** — a 50px always-drag zone between the add-tab button and the window controls (as browsers do). Without it, a full tab bar left only a ~5px sliver to move the window by. `frontend/app/tab/tabbar.tsx`.
+
+- **Directory preview columns are hideable and reorderable** — right-click the column headers to show/hide Perm, Last Modified, Size and Type; drag a header label to reorder. Persisted globally as `preview:hiddencolumns` / `preview:columnorder`.
+  - **`SetBaseConfigValue` could not set any array setting before this.** JSON-RPC decodes arrays as `[]interface{}`, which never matched a concrete slice type, so no `[]string` setting was settable over RPC. Fixed in the config writer; relevant to any future list-valued setting.
+  - react-dnd routes a refused drop to the _parent_ drop target, so dropping a column on itself or on Name used to fall through to the row's "move to end" handler (fixed in `8b5d4250`).
+
+- **Confirm before closing a tab or deleting a workspace** — `tab:confirmclose` defaults to true. The Delete Workspace dialog is now parented to its window (it was unparented and could open _behind_ Wave) with Cancel as the default button.
+
+- **A failed websocket reconnect no longer quits Wave** — in Electron main the websocket is Node's `ws` EventEmitter, so an `error` with no listener (e.g. `ETIMEDOUT` reconnecting to wavesrv after sleep) became an `uncaughtException`, and the global handler quit the app. It is logged instead; `onclose` still fires and drives the normal reconnect. Upstream bug.
+
+- **Search widget (view `agentsearch`)** — finds the workspace, tab or folder where a topic was worked on. One streaming RPC, `AgentSearchCommand` (`pkg/agentsearch/`), returns Wave results (workspace names, tab names, the local folders open in each tab) and Claude Code results (sessions in `~/.claude/projects/*/*.jsonl` plus memory files, grouped by the session's cwd).
+  - **Only user and assistant text is matched.** Tool calls and tool results are skipped, or file contents Claude merely read would match every keyword.
+  - **Folder actions:** open the matching Wave tab, Files, Terminal, Resume (`claude --resume <id>`), copy path. The gear menu sets a terminal command (`agentsearch:termcmd`) that is run or only pasted (`agentsearch:termcmdmode`).
+  - **The terminal command goes in through the block's init script, not typed pty input.** Windows PowerShell has no shell integration to signal the prompt, and input sent during Wave's startup script is swallowed. On zsh/bash/fish it runs from a **one-shot first-prompt hook**, because Wave sources init scripts _before_ `~/.zshrc` / `~/.bash_profile` / `config.fish`, so on macOS `claude` (on PATH via the rc file) was "command not found". The init script is cleared once the shell starts so restarts don't rerun it.
+  - **"Only this workspace" scoping rules** (in `agentsearch.go`): a folder is in scope if it is at or under one of the workspace's tab folders, or _above_ one only when both sit in the same git repo (`inSameRepo`, cached `.git` lookup). Otherwise a tab in a container folder like `C:\Dev` drags in every repo below it. When another workspace has a strictly closer tab, that workspace claims the folder; ties stay in both. A tab in the home dir or a volume root never counts as being in every folder below it.
+  - **Remembered state:** the last search is cached per block in `localStorage` (`agentsearch:cache:<blockId>`) so it survives workspace switches. "Only this workspace" and the Folders/Details view are per-workspace meta (`agentsearch:scoped`, `agentsearch:compact`). The layout is adaptive via Tailwind container queries: paths keep the folder name and truncate the parent from the left (`[direction:rtl]`), and action buttons drop to icons when narrow.
+
+- **Side dock** — **Dock to Right / Dock to Left** in a block's header menu (or **Open Docked to Right/Left** on a widget's right-click menu) moves the block out of the tile layout into a slide-out panel that belongs to the whole workspace.
+  - **Docked blocks are parented to the workspace** (`ParentORef workspace:<id>`), not a tab. Order is workspace meta `dock:blockids`; `dock:pinned` is per workspace; `dock:side` and `dock:width` are per block. `DBFindTabForBlockId` falls back to the workspace's active tab for them, and `DeleteWorkspace` / `deleteBlockObj` clean them up (`pkg/wcore/dock.go`, `block.go`, `workspace.go`, `wstore_dbops.go`).
+  - **Entry points:** right-side entries sit at the top of the widgets bar; left-side entries sit at the top of the workspace sidebar column, separated by a divider. A `DockStrip` appears only when that side's home (sidebar or widgets bar) is hidden.
+  - **Panel behaviour:** the panel is an overlay over the tab content (`absolute`, z-60) and slides in. Clicking outside, Esc (unless the view handled it) or the collapse button folds it away unless pinned. Panels stay mounted after first open, so reopening is instant.
+  - **`DockedBlock` renders `SubBlock` one effect late (`ready`).** Rendering it immediately adopted the layout Block's view model just before that model was disposed. Undocking uses `layoutModel.detachBlock`, which removes the node without deleting the block. The last block in a tab can't be docked.
+  - Frontend lives in `frontend/app/workspace/dock.tsx` and `dock-model.ts` (`DockModel` singleton).
+
+- **Emoji no longer garble TUIs until a resize** — xterm.js defaults to Unicode 6 widths, which count most emoji (and VS16 sequences like ☀️) as one column. TUIs such as Claude Code count them as two, so their partial redraws landed a column off. `termwrap.ts` loads `@xterm/addon-unicode-graphemes` (0.4.x, the line released with xterm 6), which sets `activeVersion = "15-graphemes"`. If a rebase bumps xterm, check this addon's matching version.
+
+- **Terminal titles with an emoji or icon** — each block can have a title plus a leading icon (a color emoji or a Font Awesome glyph with a colour), stored in existing block meta `frame:title`, `frame:icon`, `icon:color`. Terminal headers used to ignore these keys; they now lead with icon + bold title and mute the connection name. The connection name hides first as the block narrows (container query), then the title truncates, and below 200px only the icon shows.
+  - **Editing:** click the title or the hover-only **Add title** button, double-click the header (in non-terminal views, only the icon/name area, because their headers hold clickable paths), header menu **Set Title…**, or **Shift+F2**. Plain F2 was already tab rename. The picker (`frontend/app/block/blocktitle.tsx`) has Emoji/Icons tabs, search, recents in `localStorage`, glyph colours, **No icon** (stored as `"none"` so an icon is not guessed again) and **Clear title & icon**.
+  - **Titles from the running program:** programs announce a title with the standard OSC 0/2 escape. Claude Code sends `✳ <session name>` and `/rename` updates it; any tool that sets a title (Codex, editors) works the same way, with no per-tool setup. When no title was set in Wave, the header and the dock entry show it. A leading status symbol (Claude's busy spinner) is split off into its own tiny component, so spinner frames repaint one glyph rather than the header. The program title lives only in memory (`TermViewModel.programTitleAtom`); nothing is written per update.
+  - **Shell noise is filtered by shape, not by tool name.** ConPTY and shells send bare process names (`claude`) or paths (`…\powershell.exe`); those are ignored. One arriving after a program exits, or the shell's prompt marker (OSC 16162 `A`), clears a stale title. Windows PowerShell has no shell integration here, so on Windows the path title is the only end-of-program signal.
+  - **Auto icon:** with no icon chosen, one is guessed from the title's words using the picker's emoji keywords (hockey → 🏒). The editor previews the guess and saves it.
+  - **Traps found in review:**
+    - **The picker is portaled, but React still bubbles its events through the block frame.** The frame's click-to-focus handler then handed focus to the terminal mid-edit, so Enter ran the shell's current line. The floating element stops click, mousedown and focus propagation.
+    - **floating-ui's `useDismiss` treats only the reference button as inside**, so clicking the editor's own title field counted as an outside press.
+    - **The unlayered `.ellipsis { display: block }` in `tailwindsetup.css` beats layered Tailwind utilities,** so the connection label needs `!hidden`.
+    - **The block component registry is a plain `Map`,** so docked panels publish their view model to `DockModel.viewModelsAtom` for the dock entries to react to.
+
 That's it. If you add more, document them here.
 
 ## Branch + remote layout
@@ -168,5 +207,16 @@ Two gotchas cost a lot of time on 2026-08-09; both look like the app is broken w
 
 - **`npm run dev` alone will not start.** `wavesrv` exits immediately with `invalid wcloud endpoint, WCLOUD_ENDPOINT not set`. Those endpoints are injected by the Taskfile, so always launch via `task dev` (or `task electron:winquickdev` on Windows, which skips cross-compilation).
 - **A black, non-resizable window is usually the dev-only 5s init timeout.** `WaveBrowserWindow.initializeTab` wraps `initPromise` in `awaitWithDevTimeout`, which only exists when `isDev`. If the renderer takes longer than 5000ms to initialize (easy on a cold Vite transform), it throws _before_ `setBounds`/`addChildView`, so the tab view is never attached and you get an empty black window. It is not a code defect and cannot happen in a packaged build. Check `tabview init NNNNms` in the log — if it's over 5000ms, that's the cause. Workaround: run from a prebuilt bundle instead (`npm run build:dev` then `task electron:start`), which inits in ~1s.
+
+**Testing a change without touching the mouse** (handy while the installed Wave is in use): `npx electron-vite build`, then start Electron from the repo with the Taskfile's endpoints set and a debugging port open:
+
+```bash
+WCLOUD_ENDPOINT=https://api-dev.waveterm.dev/central \
+WCLOUD_WS_ENDPOINT=wss://wsapi-dev.waveterm.dev \
+WCLOUD_PING_ENDPOINT=https://ping-dev.waveterm.dev/central \
+npx electron . --remote-debugging-port=9223
+```
+
+It uses the separate `waveterm-dev` data dir, so it runs alongside the installed Wave. Drive it over the Chrome DevTools Protocol (`Runtime.evaluate`, `Input.insertText`, `Page.captureScreenshot`); `window.globalStore`, `globalAtoms`, `WOS`, `RpcApi` and `TabRpcClient` are exposed. A `location.reload()` does not pick up a rebuilt bundle; restart Electron. If you launch it from a Claude Code session, strip the `CLAUDE*` environment variables first, or the `claude` you run inside it saves no transcripts.
 
 Also: write `settings.json` without a BOM. PowerShell's `Set-Content -Encoding utf8` adds one on PS 5.1, and Go's JSON parser rejects the file, so the setting is silently ignored.
