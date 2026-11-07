@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { WaveAIModel } from "@/app/aipanel/waveai-model";
+import { BlockTitleModel } from "@/app/block/blocktitle";
 import { FocusManager } from "@/app/store/focusManager";
 import {
     atoms,
@@ -23,6 +24,7 @@ import {
 import { getActiveTabModel } from "@/app/store/tab-model";
 import { WorkspaceLayoutModel } from "@/app/workspace/workspace-layout-model";
 import { deleteLayoutModelForTab, getLayoutModelForStaticTab, NavigateDirection } from "@/layout/index";
+import { focusedBlockId } from "@/util/focusutil";
 import * as keyutil from "@/util/keyutil";
 import { isWindows } from "@/util/platformutil";
 import { CHORD_TIMEOUT } from "@/util/sharedconst";
@@ -646,6 +648,25 @@ function registerGlobalKeys() {
             return true;
         }
         return false;
+    });
+    // plain F2 already renames the tab, so the block title gets the shifted variant
+    globalKeyMap.set("Shift:F2", () => {
+        const layoutModel = getLayoutModelForStaticTab();
+        if (layoutModel == null) {
+            return false;
+        }
+        // DOM focus first: a docked block can hold focus without being the layout's focused node, and its header
+        // has no inline editor, so don't silently retarget the layout block instead
+        const domBlockId = focusedBlockId();
+        if (domBlockId != null && layoutModel.getNodeByBlockId(domBlockId) == null) {
+            return false;
+        }
+        const blockId = domBlockId ?? globalStore.get(layoutModel.focusedNode)?.data?.blockId;
+        if (blockId == null) {
+            return false;
+        }
+        BlockTitleModel.getInstance().startEdit(blockId);
+        return true;
     });
     globalKeyMap.set("Cmd:g", () => {
         const bcm = getBlockComponentModel(getFocusedBlockInStaticTab());

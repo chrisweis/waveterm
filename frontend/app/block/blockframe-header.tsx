@@ -30,6 +30,7 @@ import { cn, makeIconClass } from "@/util/util";
 import * as jotai from "jotai";
 import * as React from "react";
 import { BlockEnv } from "./blockenv";
+import { BlockTitleEditor, BlockTitleModel, TitleIcon } from "./blocktitle";
 import { BlockFrameProps } from "./blocktypes";
 
 function handleHeaderContextMenu(
@@ -45,6 +46,12 @@ function handleHeaderContextMenu(
     const canDock = getStaticTabBlockCount() > 1;
     const dockSublabel = canDock ? undefined : "the last block in a tab stays in the layout";
     const menu: ContextMenuItem[] = [
+        {
+            label: "Set Title…",
+            sublabel: "Shift+F2",
+            click: () => BlockTitleModel.getInstance().startEdit(blockId),
+        },
+        { type: "separator" },
         {
             label: magnified ? "Un-Magnify Block" : "Magnify Block",
             click: () => {
@@ -248,6 +255,9 @@ const BlockFrame_Header = ({
     const iconColor = jotai.useAtomValue(waveEnv.getBlockMetaKeyAtom(nodeModel.blockId, "icon:color"));
     const dragHandleRef = preview ? null : nodeModel.dragHandleRef;
     const isTerminalBlock = metaView === "term";
+    const editingTitle =
+        jotai.useAtomValue(BlockTitleModel.getInstance().getIsEditingAtom(nodeModel.blockId)) && !preview;
+    const hasTermTitle = useTermHeader && (!util.isBlank(metaFrameTitle) || !util.isBlank(metaFrameIcon));
     viewName = metaFrameTitle ?? viewName;
     viewIconUnion = metaFrameIcon ?? viewIconUnion;
 
@@ -260,15 +270,46 @@ const BlockFrame_Header = ({
     }, [magnified]);
 
     const viewIconElem = getViewIconElem(viewIconUnion, iconColor);
+    const startEditTitle = () => {
+        if (preview) {
+            return;
+        }
+        BlockTitleModel.getInstance().startEdit(nodeModel.blockId);
+    };
+    const titleEditor = (
+        <BlockTitleEditor
+            key="title-editor"
+            blockId={nodeModel.blockId}
+            title={metaFrameTitle}
+            icon={metaFrameIcon}
+            iconColor={iconColor}
+        />
+    );
 
     return (
         <div
-            className={cn("block-frame-default-header", useTermHeader && "!pl-[2px]")}
+            className={cn("block-frame-default-header group/header @container/header", useTermHeader && "!pl-[2px]")}
             data-role="block-header"
             ref={dragHandleRef}
             onContextMenu={(e) => handleHeaderContextMenu(e, nodeModel.blockId, viewModel, nodeModel, waveEnv)}
+            onDoubleClick={(e) => {
+                const target = e.target as HTMLElement;
+                if (target.closest("button, input, a, .iconbutton")) {
+                    return;
+                }
+                // other views put clickable text (paths, breadcrumbs) in the header, so only their name area edits
+                if (
+                    !useTermHeader &&
+                    target !== e.currentTarget &&
+                    !target.closest(".block-frame-default-header-iconview")
+                ) {
+                    return;
+                }
+                startEditTitle();
+            }}
         >
-            {!useTermHeader && (
+            {!useTermHeader && editingTitle && titleEditor}
+            {!useTermHeader && !editingTitle && (
                 <>
                     {preIconButton && <IconButton decl={preIconButton} className="block-frame-preicon-button" />}
                     <div className="block-frame-default-header-iconview">
@@ -277,6 +318,21 @@ const BlockFrame_Header = ({
                     </div>
                 </>
             )}
+            {useTermHeader && editingTitle && titleEditor}
+            {useTermHeader && !editingTitle && hasTermTitle && (
+                <div
+                    className="flex min-w-[18px] shrink cursor-pointer items-center gap-1.5 overflow-hidden rounded-sm pr-1 pl-1.5 hover:bg-hover"
+                    title={metaFrameTitle ? `${metaFrameTitle} (click to rename)` : "Click to rename"}
+                    onClick={startEditTitle}
+                >
+                    <TitleIcon icon={metaFrameIcon} color={iconColor} className="text-[13px]" />
+                    {!util.isBlank(metaFrameTitle) && (
+                        <span className="truncate text-[13px] font-semibold text-primary @max-[200px]/header:hidden">
+                            {metaFrameTitle}
+                        </span>
+                    )}
+                </div>
+            )}
             {manageConnection && (
                 <ConnectionButton
                     ref={connBtnRef}
@@ -284,7 +340,18 @@ const BlockFrame_Header = ({
                     connection={metaConnection}
                     changeConnModalAtom={changeConnModalAtom}
                     isTerminalBlock={isTerminalBlock}
+                    subdued={hasTermTitle}
                 />
+            )}
+            {useTermHeader && !editingTitle && !hasTermTitle && !preview && (
+                <button
+                    type="button"
+                    className="hidden shrink-0 cursor-pointer items-center gap-1 rounded border border-border px-1.5 py-[1px] text-[11px] text-muted group-hover/header:flex hover:text-primary @max-[360px]/header:!hidden"
+                    onClick={startEditTitle}
+                >
+                    <i className="fa fa-solid fa-pen text-[9px]" />
+                    Add title
+                </button>
             )}
             {useTermHeader && termConfigedDurable != null && (
                 <DurableSessionFlyover

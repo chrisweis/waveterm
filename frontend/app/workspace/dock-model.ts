@@ -211,5 +211,5 @@ export function getDockEntryInfo(block: Block, widgets: WidgetConfigType[]): Doc
     );
     const icon = meta["frame:icon"] || widget?.icon || blockViewToIcon(view);
     const label = meta["frame:title"] || widget?.label || blockViewToName(view);
-    return { icon, label, color: widget?.color };
+    return { icon, label, color: meta["icon:color"] || widget?.color };
 }

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { SubBlock } from "@/app/block/block";
+import { TitleIcon } from "@/app/block/blocktitle";
 import type { BlockNodeModel } from "@/app/block/blocktypes";
 import { Tooltip } from "@/app/element/tooltip";
 import { ContextMenuModel } from "@/app/store/contextmenu";
@@ -104,7 +105,7 @@ const DockedBlockHeader = memo(
                     showDockedBlockMenu(blockId, e);
                 }}
             >
-                <i className={cn(makeIconClass(icon, true), "text-[13px] text-secondary")} />
+                <TitleIcon icon={icon} color={info.color} className="text-[13px] text-secondary" />
                 <span className="shrink-0 text-[13px] font-medium text-primary">{name}</span>
                 {typeof viewText == "string" && viewText && (
                     <span className="min-w-0 truncate text-[12px] text-muted">{viewText}</span>
@@ -351,7 +352,7 @@ const DockEntry = memo(({ blockId, mode, side }: { blockId: string; mode: Widget
                     )}
                 />
                 <div style={{ color: info.color }}>
-                    <i className={makeIconClass(info.icon, true, { defaultIcon: "browser" })} />
+                    <TitleIcon icon={info.icon} defaultIcon="browser" />
                 </div>
                 {mode === "normal" && (
                     <div className="text-xxs mt-0.5 w-full px-0.5 text-center whitespace-nowrap overflow-hidden text-ellipsis">
@@ -418,10 +419,7 @@ const DockSidebarRow = memo(({ blockId, compact }: { blockId: string; compact: b
                         isOpen ? "bg-accent" : "bg-accent/40"
                     )}
                 />
-                <i
-                    className={cn(makeIconClass(info.icon, true, { defaultIcon: "browser" }), "shrink-0 text-[12px]")}
-                    style={{ color: info.color }}
-                />
+                <TitleIcon icon={info.icon} defaultIcon="browser" color={info.color} className="text-[12px]" />
                 {!compact && <div className="truncate text-[12px]">{info.label}</div>}
             </div>
         </Tooltip>

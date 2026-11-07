@@ -1,6 +1,7 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { isTextIcon } from "@/app/block/blocktitle";
 import { Button } from "@/app/element/button";
 import {
     MetaKeyAtomFnType,
@@ -158,6 +159,9 @@ export function getBlockHeaderIcon(blockIcon: string, overrideIconColor?: string
     let iconStyle = null;
     if (!util.isBlank(iconColor)) {
         iconStyle = { color: iconColor };
+    }
+    if (isTextIcon(blockIcon)) {
+        return <span className="block-frame-icon not-italic">{blockIcon}</span>;
     }
     const iconClass = util.makeIconClass(blockIcon, true);
     if (iconClass != null) {

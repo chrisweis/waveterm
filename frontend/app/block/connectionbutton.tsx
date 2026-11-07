@@ -15,11 +15,16 @@ interface ConnectionButtonProps {
     connection: string;
     changeConnModalAtom: jotai.PrimitiveAtom<boolean>;
     isTerminalBlock?: boolean;
+    subdued?: boolean;
 }
+
+// when the block has its own title, the connection name gives way to it first as the header narrows
+// important: the unlayered .ellipsis rule sets display:block, which beats a layered utility
+const SubduedLabelClassName = "!text-muted @max-[420px]/header:!hidden";
 
 export const ConnectionButton = React.memo(
     React.forwardRef<HTMLDivElement, ConnectionButtonProps>(
-        ({ connection, changeConnModalAtom, isTerminalBlock }: ConnectionButtonProps, ref) => {
+        ({ connection, changeConnModalAtom, isTerminalBlock, subdued }: ConnectionButtonProps, ref) => {
             const waveEnv = useWaveEnv<BlockEnv>();
             const [_connModalOpen, setConnModalOpen] = jotai.useAtom(changeConnModalAtom);
             const isLocal = util.isLocalConnName(connection);
@@ -133,13 +138,21 @@ export const ConnectionButton = React.memo(
                             <div
                                 className={util.cn(
                                     "flex-[1_2_auto] overflow-hidden pr-1 ellipsis",
-                                    extraDisplayNameClassName
+                                    extraDisplayNameClassName,
+                                    subdued && SubduedLabelClassName
                                 )}
                             >
                                 {connDisplayName}
                             </div>
                         ) : isLocal ? null : (
-                            <div className="flex-[1_2_auto] overflow-hidden pr-1 ellipsis">{connection}</div>
+                            <div
+                                className={util.cn(
+                                    "flex-[1_2_auto] overflow-hidden pr-1 ellipsis",
+                                    subdued && SubduedLabelClassName
+                                )}
+                            >
+                                {connection}
+                            </div>
                         )}
                     </div>
                     {showNoWshButton && (
