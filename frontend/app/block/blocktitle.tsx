@@ -22,6 +22,12 @@ import * as React from "react";
 const RecentIconsKey = "blocktitle:recenticons";
 const MaxRecentIcons = 8;
 const MaxTitleLength = 80;
+// stored in frame:icon when the user picked "No icon", so an icon isn't guessed from the title again
+export const NoIconSentinel = "none";
+
+export function isNoIcon(icon: string): boolean {
+    return icon == null || icon.trim() == "" || icon === NoIconSentinel;
+}
 
 export const TitleIconColors = ["#e6e6e6", "#58c142", "#4fa3f7", "#b48ef0", "#f2b33d", "#f07a5a", "#e05a8a", "#3cc6c0"];
 
@@ -37,8 +43,8 @@ const EmojiChoices: [string, string][] = [
     ["❗", "important alert"],
     ["⚠️", "warning caution"],
     ["🎯", "target goal focus"],
-    ["🧠", "brain think ai claude"],
-    ["🤖", "robot ai agent bot claude"],
+    ["🧠", "brain think"],
+    ["🤖", "robot ai agent bot claude codex"],
     ["💻", "laptop computer local"],
     ["🖥️", "desktop computer monitor"],
     ["⚙️", "gear settings config"],
@@ -179,6 +185,9 @@ export function TitleIcon({
     className?: string;
     defaultIcon?: string;
 }) {
+    if (icon === NoIconSentinel) {
+        return null;
+    }
     if (isTextIcon(icon)) {
         return <span className={cn("inline-block shrink-0 leading-none not-italic", className)}>{icon}</span>;
     }
@@ -187,6 +196,86 @@ export function TitleIcon({
         return null;
     }
     return <i className={cn(iconClass, "shrink-0", className)} style={color ? { color } : null} />;
+}
+
+// Generic markers (status dots, numbers, warnings) are fine to pick by hand but too vague to guess from a title.
+const NonGuessableEmoji = new Set([
+    "✅",
+    "❗",
+    "⚠️",
+    "⭐",
+    "❤️",
+    "☀️",
+    "🌙",
+    "🔴",
+    "🟠",
+    "🟡",
+    "🟢",
+    "🔵",
+    "🟣",
+    "⚫",
+    "⚪",
+    "1️⃣",
+    "2️⃣",
+    "3️⃣",
+    "4️⃣",
+    "5️⃣",
+]);
+
+const GuessKeywordToEmoji: Map<string, string> = (() => {
+    const m = new Map<string, string>();
+    for (const [emoji, keywords] of EmojiChoices) {
+        if (NonGuessableEmoji.has(emoji)) {
+            continue;
+        }
+        for (const kw of keywords.split(" ")) {
+            if (kw && !m.has(kw)) {
+                m.set(kw, emoji);
+            }
+        }
+    }
+    return m;
+})();
+
+// Picks an emoji for a title from the picker's own keywords, so "Hockey roster sync" gets 🏒. Returns null when
+// nothing matches; the first matching word wins.
+export function guessTitleIcon(title: string): string {
+    if (!title) {
+        return null;
+    }
+    const words = title.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+    for (const w of words) {
+        const emoji = GuessKeywordToEmoji.get(w);
+        if (emoji) {
+            return emoji;
+        }
+    }
+    return null;
+}
+
+export type ProgramTitle = { name: string; status: string };
+
+// Terminal programs announce a title with the standard OSC 0/2 escape (Claude Code sends "✳ <session name>", and
+// its /rename updates it). Shells and ConPTY also send titles that are just a process name or a path; those are
+// noise, and one arriving after a program exits is the signal that the program's title no longer applies.
+// Returns null for "no program title".
+export function parseProgramTitle(raw: string): ProgramTitle {
+    const t = (raw ?? "").trim();
+    if (!t) {
+        return null;
+    }
+    const isPath = /^[a-zA-Z]:[\\/]/.test(t) || t.startsWith("/") || t.startsWith("~") || t.includes("\\");
+    const isProcessName = /^[\w.-]+$/.test(t);
+    const isUserAtHost = /^[\w.-]+@[\w.-]+:/.test(t);
+    if (isPath || isProcessName || isUserAtHost) {
+        return null;
+    }
+    // a leading symbol followed by a space is a status marker (Claude's ✳ idle / ◐ busy spinner), not part of the name
+    const m = t.match(/^([^\p{L}\p{N}\s][\uFE0F]?)\s+(.+)$/u);
+    if (m) {
+        return { status: m[1], name: m[2].slice(0, MaxTitleLength) };
+    }
+    return { status: null, name: t.slice(0, MaxTitleLength) };
 }
 
 type GraphemeSegmenter = { segment: (text: string) => Iterable<unknown> };
@@ -299,7 +388,7 @@ export class BlockTitleModel {
         // icon:color also tints the block's default view icon and its dock entry, so only touch it when a glyph is
         // chosen here, when the glyph whose color it was is being removed, or when title and icon are both cleared
         // (which should restore the block's default look)
-        const isGlyph = (i: string) => !!i && !isTextIcon(i);
+        const isGlyph = (i: string) => !isNoIcon(i) && !isTextIcon(i);
         if (isGlyph(icon)) {
             meta["icon:color"] = iconColor || null;
         } else if (isGlyph(prevIcon) || (!icon && !cleanTitle)) {
@@ -482,8 +571,12 @@ export const BlockTitleEditor = React.memo(
     ({ blockId, title, icon, iconColor }: { blockId: string; title: string; icon: string; iconColor: string }) => {
         const model = BlockTitleModel.getInstance();
         const [draft, setDraft] = React.useState(title ?? "");
-        const [draftIcon, setDraftIcon] = React.useState(icon ?? "");
+        const [draftIcon, setDraftIcon] = React.useState(isNoIcon(icon) ? "" : icon);
         const [draftColor, setDraftColor] = React.useState(iconColor ?? "");
+        // once the user picks anything in the picker (including "No icon"), stop suggesting one from the title
+        const [iconChosen, setIconChosen] = React.useState(!!icon);
+        const noIconChosen = iconChosen && !draftIcon;
+        const suggestedIcon = !iconChosen && !draftIcon ? guessTitleIcon(draft) : null;
         const [pickerOpen, setPickerOpen] = React.useState(false);
         const inputRef = React.useRef<HTMLInputElement>(null);
         const wrapperRef = React.useRef<HTMLDivElement>(null);
@@ -526,7 +619,11 @@ export const BlockTitleEditor = React.memo(
             }
             doneRef.current = true;
             if (save) {
-                const v = override ?? { title: draft, icon: draftIcon, color: draftColor };
+                const v = override ?? {
+                    title: draft,
+                    icon: draftIcon || suggestedIcon || (noIconChosen && draft.trim() ? NoIconSentinel : ""),
+                    color: draftColor,
+                };
                 model.saveTitle(blockId, v.title, v.icon, v.color, icon);
             }
             model.stopEdit(blockId);
@@ -594,6 +691,10 @@ export const BlockTitleEditor = React.memo(
                 >
                     {draftIcon ? (
                         <TitleIcon icon={draftIcon} color={draftColor} className="text-[13px]" />
+                    ) : suggestedIcon ? (
+                        <span title="Suggested from the title" className="opacity-60">
+                            <TitleIcon icon={suggestedIcon} className="text-[13px]" />
+                        </span>
                     ) : (
                         <i className="fa fa-regular fa-face-smile text-[12px] text-muted" />
                     )}
@@ -628,6 +729,7 @@ export const BlockTitleEditor = React.memo(
                                 icon={draftIcon}
                                 iconColor={draftColor}
                                 onPick={(newIcon, newColor, close) => {
+                                    setIconChosen(true);
                                     setDraftIcon(newIcon);
                                     setDraftColor(newColor);
                                     if (close) {

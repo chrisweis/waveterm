@@ -308,6 +308,8 @@ export function handleOsc16162Command(data: string, blockId: string, loaded: boo
         case "A": {
             rtInfo["shell:state"] = "ready";
             globalStore.set(termWrap.shellIntegrationStatusAtom, "ready");
+            // back at the prompt, so a title set by the program that just exited no longer describes this terminal
+            termWrap.titleHandler?.("");
             globalStore.set(termWrap.claudeCodeActiveAtom, false);
             const marker = terminal.registerMarker(0);
             if (marker) {

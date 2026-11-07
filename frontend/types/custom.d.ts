@@ -310,6 +310,10 @@ declare global {
 
         useTermHeader?: jotai.Atom<boolean>;
 
+        // title announced by the program running in a terminal (OSC 0/2), split from any leading status marker
+        programNameAtom?: jotai.Atom<string>;
+        programStatusAtom?: jotai.Atom<string>;
+
         hideViewName?: jotai.Atom<boolean>;
 
         // Icon representing the view, can be a string or an IconButton declaration.

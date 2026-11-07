@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { SubBlock } from "@/app/block/block";
-import { TitleIcon } from "@/app/block/blocktitle";
+import { guessTitleIcon, TitleIcon } from "@/app/block/blocktitle";
 import type { BlockNodeModel } from "@/app/block/blocktypes";
 import { Tooltip } from "@/app/element/tooltip";
 import { ContextMenuModel } from "@/app/store/contextmenu";
@@ -85,6 +85,19 @@ function HeaderButton({
     );
 }
 
+// Same title and icon as the block's own header: a title set in Wave, else the live title of the program running in
+// a docked terminal (Claude Code, Codex, ...), with an icon guessed from it when none was chosen.
+function useDockEntryInfo(blockId: string, block: Block, widgets: WidgetConfigType[], viewModel?: ViewModel) {
+    const publishedVm = useAtomValue(DockModel.getInstance().viewModelsAtom)[blockId];
+    const vm = viewModel ?? publishedVm;
+    const programName = useAtomValueSafe(vm?.programNameAtom);
+    const info = getDockEntryInfo(block, widgets);
+    const meta = block?.meta ?? {};
+    const title = meta["frame:title"] || programName;
+    const guessed = !meta["frame:icon"] ? guessTitleIcon(title) : null;
+    return { ...info, label: title || info.label, icon: guessed ?? info.icon };
+}
+
 const DockedBlockHeader = memo(
     ({ blockId, viewModel, side }: { blockId: string; viewModel: ViewModel; side: DockSide }) => {
         const model = DockModel.getInstance();
@@ -94,7 +107,7 @@ const DockedBlockHeader = memo(
         const viewIcon = useAtomValueSafe(viewModel?.viewIcon);
         const viewName = useAtomValueSafe(viewModel?.viewName);
         const viewText = useAtomValueSafe(viewModel?.viewText);
-        const info = getDockEntryInfo(block, widgets);
+        const info = useDockEntryInfo(blockId, block, widgets, viewModel);
         const icon = typeof viewIcon == "string" ? viewIcon : info.icon;
         const name = viewName || info.label;
         return (
@@ -163,7 +176,14 @@ const DockedBlock = memo(({ blockId, visible, side }: { blockId: string; visible
         if (!ready) {
             return;
         }
-        setViewModel(getBlockComponentModel(blockId)?.viewModel ?? null);
+        const vm = getBlockComponentModel(blockId)?.viewModel ?? null;
+        setViewModel(vm);
+        const model = DockModel.getInstance();
+        globalStore.set(model.viewModelsAtom, { ...globalStore.get(model.viewModelsAtom), [blockId]: vm });
+        return () => {
+            const { [blockId]: _, ...rest } = globalStore.get(model.viewModelsAtom);
+            globalStore.set(model.viewModelsAtom, rest);
+        };
     }, [blockId, ready]);
     useEffect(() => {
         if (!visible || !ready) {
@@ -319,10 +339,10 @@ const DockEntry = memo(({ blockId, mode, side }: { blockId: string; mode: Widget
     const openIds = useAtomValue(model.openIdsAtom);
     const block = useDockedBlock(blockId);
     const widgets = useWidgetList();
+    const info = useDockEntryInfo(blockId, block, widgets);
     if (block == null) {
         return null;
     }
-    const info = getDockEntryInfo(block, widgets);
     const isOpen = openIds[getBlockDockSide(block)] == blockId;
     return (
         <Tooltip
@@ -387,10 +407,10 @@ const DockSidebarRow = memo(({ blockId, compact }: { blockId: string; compact: b
     const openIds = useAtomValue(model.openIdsAtom);
     const block = useDockedBlock(blockId);
     const widgets = useWidgetList();
+    const info = useDockEntryInfo(blockId, block, widgets);
     if (block == null) {
         return null;
     }
-    const info = getDockEntryInfo(block, widgets);
     const isOpen = openIds.left == blockId;
     return (
         <Tooltip

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { WaveAIModel } from "@/app/aipanel/waveai-model";
+import { parseProgramTitle, type ProgramTitle } from "@/app/block/blocktitle";
 import { BlockNodeModel } from "@/app/block/blocktypes";
 import { appHandleKeyDown } from "@/app/store/keymodel";
 import { modalsModel } from "@/app/store/modalmodel";
@@ -50,6 +51,9 @@ export class TermViewModel implements ViewModel {
     connected: boolean;
     termRef: React.RefObject<TermWrap> = { current: null };
     blockAtom: jotai.Atom<Block>;
+    programTitleAtom = jotai.atom(null) as jotai.PrimitiveAtom<ProgramTitle>;
+    programNameAtom: jotai.Atom<string>;
+    programStatusAtom: jotai.Atom<string>;
     termMode: jotai.Atom<string>;
     blockId: string;
     viewIcon: jotai.Atom<IconButtonDecl>;
@@ -125,6 +129,9 @@ export class TermViewModel implements ViewModel {
             }
             return "";
         });
+        // split so the header only re-renders when the name changes, not on every frame of a status spinner
+        this.programNameAtom = jotai.atom((get) => get(this.programTitleAtom)?.name ?? null);
+        this.programStatusAtom = jotai.atom((get) => get(this.programTitleAtom)?.status ?? null);
         this.viewText = jotai.atom((get) => {
             const termMode = get(this.termMode);
             if (termMode == "vdom") {
@@ -495,6 +502,15 @@ export class TermViewModel implements ViewModel {
             return false;
         }
         return true;
+    }
+
+    setProgramTitle(rawTitle: string) {
+        const next = parseProgramTitle(rawTitle);
+        const cur = globalStore.get(this.programTitleAtom);
+        if (cur?.name === next?.name && cur?.status === next?.status) {
+            return;
+        }
+        globalStore.set(this.programTitleAtom, next);
     }
 
     multiInputHandler(data: string) {

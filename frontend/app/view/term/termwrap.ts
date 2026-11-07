@@ -73,6 +73,7 @@ type TermWrapOptions = {
     useWebGl?: boolean;
     sendDataHandler?: (data: string) => void;
     nodeModel?: BlockNodeModel;
+    titleHandler?: (title: string) => void;
 };
 
 export class TermWrap {
@@ -101,6 +102,7 @@ export class TermWrap {
     lastUpdated: number;
     promptMarkers: TermTypes.IMarker[] = [];
     shellIntegrationStatusAtom: jotai.PrimitiveAtom<ShellIntegrationStatus | null>;
+    titleHandler: (title: string) => void;
     lastCommandAtom: jotai.PrimitiveAtom<string | null>;
     claudeCodeActiveAtom: jotai.PrimitiveAtom<boolean>;
     nodeModel: BlockNodeModel; // this can be null
@@ -134,6 +136,7 @@ export class TermWrap {
         this.tabId = tabId;
         this.blockId = blockId;
         this.sendDataHandler = waveOptions.sendDataHandler;
+        this.titleHandler = waveOptions.titleHandler;
         this.nodeModel = waveOptions.nodeModel;
         this.ptyOffset = 0;
         this.dataBytesProcessed = 0;
@@ -155,6 +158,7 @@ export class TermWrap {
         // column. TUIs such as Claude Code count them as two, so their partial redraws land a column off and leave
         // garbled text until a resize forces a full repaint. The graphemes provider matches their widths.
         this.terminal.loadAddon(new UnicodeGraphemesAddon());
+        this.terminal.onTitleChange((title) => this.titleHandler?.(title));
         this.terminal.loadAddon(
             new WebLinksAddon(
                 (e, uri) => {

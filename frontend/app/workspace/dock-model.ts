@@ -1,6 +1,7 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { isNoIcon } from "@/app/block/blocktitle";
 import { blockViewToIcon, blockViewToName } from "@/app/block/blockutil";
 import { atoms, globalStore, WOS } from "@/app/store/global";
 import { ObjectService } from "@/app/store/services";
@@ -40,6 +41,9 @@ export class DockModel {
     >;
     // Panels stay mounted after their first open, so reopening is instant and keeps scroll, input, and terminal state.
     mountedIdsAtom = jotai.atom<string[]>([]) as jotai.PrimitiveAtom<string[]>;
+    // the block component registry is a plain map, so docked panels publish their view model here for the dock
+    // entries (which render before the panel mounts) to pick up reactively
+    viewModelsAtom = jotai.atom<Record<string, ViewModel>>({}) as jotai.PrimitiveAtom<Record<string, ViewModel>>;
     dragWidthAtom = jotai.atom<{ blockId: string; width: number }>(null) as jotai.PrimitiveAtom<{
         blockId: string;
         width: number;
@@ -209,7 +213,8 @@ export function getDockEntryInfo(block: Block, widgets: WidgetConfigType[]): Doc
     const widget = widgets.find(
         (w) => w.blockdef?.meta?.view == view && w.blockdef?.meta?.controller == meta.controller
     );
-    const icon = meta["frame:icon"] || widget?.icon || blockViewToIcon(view);
+    const frameIcon = isNoIcon(meta["frame:icon"]) ? null : meta["frame:icon"];
+    const icon = frameIcon || widget?.icon || blockViewToIcon(view);
     const label = meta["frame:title"] || widget?.label || blockViewToName(view);
     return { icon, label, color: meta["icon:color"] || widget?.color };
 }

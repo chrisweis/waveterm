@@ -30,7 +30,7 @@ import { cn, makeIconClass } from "@/util/util";
 import * as jotai from "jotai";
 import * as React from "react";
 import { BlockEnv } from "./blockenv";
-import { BlockTitleEditor, BlockTitleModel, TitleIcon } from "./blocktitle";
+import { BlockTitleEditor, BlockTitleModel, guessTitleIcon, isNoIcon, NoIconSentinel, TitleIcon } from "./blocktitle";
 import { BlockFrameProps } from "./blocktypes";
 
 function handleHeaderContextMenu(
@@ -229,6 +229,16 @@ const HeaderEndIcons = React.memo(({ viewModel, nodeModel, blockId }: HeaderEndI
 });
 HeaderEndIcons.displayName = "HeaderEndIcons";
 
+// Its own component so a program's status spinner (several frames a second) re-renders only this glyph.
+const ProgramStatus = React.memo(({ viewModel }: { viewModel: ViewModel }) => {
+    const status = util.useAtomValueSafe(viewModel?.programStatusAtom);
+    if (util.isBlank(status)) {
+        return null;
+    }
+    return <span className="w-[1.2em] shrink-0 text-center text-[11px] text-muted">{status}</span>;
+});
+ProgramStatus.displayName = "ProgramStatus";
+
 const BlockFrame_Header = ({
     nodeModel,
     viewModel,
@@ -257,9 +267,18 @@ const BlockFrame_Header = ({
     const isTerminalBlock = metaView === "term";
     const editingTitle =
         jotai.useAtomValue(BlockTitleModel.getInstance().getIsEditingAtom(nodeModel.blockId)) && !preview;
-    const hasTermTitle = useTermHeader && (!util.isBlank(metaFrameTitle) || !util.isBlank(metaFrameIcon));
+    const programName = util.useAtomValueSafe(viewModel?.programNameAtom);
+    // a title set in Wave wins; otherwise show whatever the running program (Claude Code, Codex, ...) announces
+    const termTitle = useTermHeader ? (!util.isBlank(metaFrameTitle) ? metaFrameTitle : programName) : null;
+    const titleFromProgram = useTermHeader && util.isBlank(metaFrameTitle) && !util.isBlank(programName);
+    const guessedIcon = React.useMemo(
+        () => (useTermHeader && util.isBlank(metaFrameIcon) ? guessTitleIcon(termTitle) : null),
+        [useTermHeader, metaFrameIcon, termTitle]
+    );
+    const termIcon = !util.isBlank(metaFrameIcon) ? metaFrameIcon : guessedIcon;
+    const hasTermTitle = useTermHeader && (!util.isBlank(termTitle) || !isNoIcon(termIcon));
     viewName = metaFrameTitle ?? viewName;
-    viewIconUnion = metaFrameIcon ?? viewIconUnion;
+    viewIconUnion = metaFrameIcon && metaFrameIcon !== NoIconSentinel ? metaFrameIcon : viewIconUnion;
 
     React.useEffect(() => {
         if (magnified && !preview && !prevMagifiedState.current) {
@@ -280,7 +299,7 @@ const BlockFrame_Header = ({
         <BlockTitleEditor
             key="title-editor"
             blockId={nodeModel.blockId}
-            title={metaFrameTitle}
+            title={useTermHeader ? termTitle : metaFrameTitle}
             icon={metaFrameIcon}
             iconColor={iconColor}
         />
@@ -322,15 +341,22 @@ const BlockFrame_Header = ({
             {useTermHeader && !editingTitle && hasTermTitle && (
                 <div
                     className="flex min-w-[18px] shrink cursor-pointer items-center gap-1.5 overflow-hidden rounded-sm pr-1 pl-1.5 hover:bg-hover"
-                    title={metaFrameTitle ? `${metaFrameTitle} (click to rename)` : "Click to rename"}
+                    title={
+                        titleFromProgram
+                            ? `${termTitle} (from the running program; click to set your own)`
+                            : termTitle
+                              ? `${termTitle} (click to rename)`
+                              : "Click to rename"
+                    }
                     onClick={startEditTitle}
                 >
-                    <TitleIcon icon={metaFrameIcon} color={iconColor} className="text-[13px]" />
-                    {!util.isBlank(metaFrameTitle) && (
+                    <TitleIcon icon={termIcon} color={iconColor} className="text-[13px]" />
+                    {!util.isBlank(termTitle) && (
                         <span className="truncate text-[13px] font-semibold text-primary @max-[200px]/header:hidden">
-                            {metaFrameTitle}
+                            {termTitle}
                         </span>
                     )}
+                    <ProgramStatus viewModel={viewModel} />
                 </div>
             )}
             {manageConnection && (
