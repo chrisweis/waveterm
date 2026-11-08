@@ -7,6 +7,7 @@ import { cn } from "@/util/util";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { activityGlowStyle } from "./activityglow";
 import { TabBadges } from "./tabbadges";
+import { requestTabRename, useEndRenameWhenHidden, useForwardedTabRename } from "./tabrename";
 
 const RenameFocusDelayMs = 50;
 
@@ -116,6 +117,9 @@ export function VTab({
         renameRef.current = startRename;
     }
 
+    useForwardedTabRename(tab.id, active, startRename);
+    useEndRenameWhenHidden(isEditable, editableRef);
+
     const handleBlur = () => {
         if (!editableRef.current) {
             return;
@@ -157,6 +161,10 @@ export function VTab({
             onClick={onSelect}
             onDoubleClick={(event) => {
                 event.stopPropagation();
+                if (!active) {
+                    requestTabRename(tab.id);
+                    return;
+                }
                 startRename();
             }}
             onContextMenu={onContextMenu}
@@ -201,6 +209,7 @@ export function VTab({
                     isEditable && "rounded-[2px] bg-white/15 outline-none"
                 )}
                 contentEditable={isEditable}
+                data-tabname-editor=""
                 role="textbox"
                 aria-label="Tab name"
                 aria-readonly={!isEditable}

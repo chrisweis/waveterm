@@ -16,7 +16,7 @@ import { useDebouncedNodeInnerRect } from "@/layout/index";
 import { counterInc } from "@/store/counters";
 import { getBlockComponentModel, registerBlockComponentModel, unregisterBlockComponentModel } from "@/store/global";
 import { makeORef } from "@/store/wos";
-import { focusedBlockId, getElemAsStr } from "@/util/focusutil";
+import { focusedBlockId, getElemAsStr, isTabNameBeingEdited } from "@/util/focusutil";
 import { isBlank, useAtomValueSafe } from "@/util/util";
 import clsx from "clsx";
 import { useAtomValue } from "jotai";
@@ -178,6 +178,9 @@ const BlockFull = memo(({ nodeModel, viewModel }: FullBlockProps) => {
         if (pendingFocusRafRef.current != null) {
             cancelAnimationFrame(pendingFocusRafRef.current);
             pendingFocusRafRef.current = null;
+        }
+        if (isTabNameBeingEdited()) {
+            return;
         }
         const ok = viewModel?.giveFocus?.();
         if (ok) {

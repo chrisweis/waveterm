@@ -17,6 +17,7 @@ import { activityGlowStyle } from "./activityglow";
 import "./tab.scss";
 import { TabBadges } from "./tabbadges";
 import { buildTabContextMenu } from "./tabcontextmenu";
+import { requestTabRename, useEndRenameWhenHidden, useForwardedTabRename } from "./tabrename";
 
 // Caps both the displayed name and what can be typed into the rename box. Long names still
 // ellipsize inside a fixed-width tab; with tab:autosize on they widen the tab instead, so this
@@ -132,10 +133,17 @@ const TabV = forwardRef<HTMLDivElement, TabVProps>((props, ref) => {
     const handleRenameTab: React.MouseEventHandler<HTMLDivElement> = useCallback(
         (event) => {
             event?.stopPropagation();
+            if (!active) {
+                requestTabRename(tabId);
+                return;
+            }
             startRename();
         },
-        [startRename]
+        [startRename, active, tabId]
     );
+
+    useForwardedTabRename(tabId, active, startRename);
+    useEndRenameWhenHidden(isEditable, editableRef);
 
     // Expose startRename to external callers (e.g. context menu in TabInner)
     if (renameRef != null) {
@@ -219,6 +227,7 @@ const TabV = forwardRef<HTMLDivElement, TabVProps>((props, ref) => {
                     ref={editableRef}
                     className={clsx("name", { focused: isEditable })}
                     contentEditable={isEditable}
+                    data-tabname-editor=""
                     onDoubleClick={handleRenameTab}
                     onBlur={handleBlur}
                     onKeyDown={handleKeyDown}

@@ -36,6 +36,7 @@ import {
 } from "@/store/global";
 import * as services from "@/store/services";
 import * as keyutil from "@/util/keyutil";
+import { isTabNameBeingEdited } from "@/util/focusutil";
 import { isMacOS, isWindows } from "@/util/platformutil";
 import { boundNumber, fireAndForget, stringToBase64 } from "@/util/util";
 import * as jotai from "jotai";
@@ -615,6 +616,9 @@ export class TermViewModel implements ViewModel {
     }
 
     giveFocus(): boolean {
+        if (isTabNameBeingEdited()) {
+            return true;
+        }
         if (this.searchAtoms && globalStore.get(this.searchAtoms.isOpen)) {
             console.log("search is open, not giving focus");
             return true;

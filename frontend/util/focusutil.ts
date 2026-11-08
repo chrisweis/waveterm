@@ -45,6 +45,16 @@ export function hasSelection() {
     return sel && sel.rangeCount > 0 && !sel.isCollapsed;
 }
 
+// Blocks take focus on their own schedule -- a new tab's terminal grabs it once it finishes
+// starting, well after the tab bar is up -- and a rename begun in that window would lose its
+// focus mid-word, committing what was typed so far and sending the rest to the shell. Programmatic
+// focus defers to the tab name editor; a real click elsewhere still blurs it first, so this only
+// ever blocks focus nobody asked for.
+export function isTabNameBeingEdited(): boolean {
+    const focused = document.activeElement;
+    return focused instanceof HTMLElement && focused.isContentEditable && focused.hasAttribute("data-tabname-editor");
+}
+
 export function focusedBlockId(): string {
     const focused = document.activeElement;
     if (focused instanceof HTMLElement) {
