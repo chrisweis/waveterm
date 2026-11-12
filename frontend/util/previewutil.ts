@@ -58,17 +58,22 @@ export function addOpenMenuItems(menu: ContextMenuItem[], conn: string, finfo: F
     }
     menu.push({
         label: "Open Terminal Here",
-        click: () => {
-            const termBlockDef: BlockDef = {
-                meta: {
-                    controller: "shell",
-                    view: "term",
-                    "cmd:cwd": finfo.isdir ? finfo.path : finfo.dir,
-                    connection: conn,
-                },
-            };
-            fireAndForget(() => createBlock(termBlockDef));
-        },
+        click: () => openTerminalHere(conn, finfo),
     });
     return menu;
+}
+
+export function openTerminalHere(conn: string, finfo: FileInfo) {
+    if (!finfo) {
+        return;
+    }
+    const termBlockDef: BlockDef = {
+        meta: {
+            controller: "shell",
+            view: "term",
+            "cmd:cwd": finfo.isdir ? finfo.path : finfo.dir,
+            connection: conn,
+        },
+    };
+    fireAndForget(() => createBlock(termBlockDef));
 }

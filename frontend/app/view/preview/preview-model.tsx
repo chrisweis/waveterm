@@ -10,7 +10,7 @@ import { getOverrideConfigAtom, refocusNode } from "@/store/global";
 import * as WOS from "@/store/wos";
 import { goHistory, goHistoryBack, goHistoryForward } from "@/util/historyutil";
 import { checkKeyPressed } from "@/util/keyutil";
-import { addOpenMenuItems } from "@/util/previewutil";
+import { addOpenMenuItems, openTerminalHere } from "@/util/previewutil";
 import { base64ToString, fireAndForget, isBlank, jotaiLoadableValue, stringToBase64 } from "@/util/util";
 import { formatRemoteUri } from "@/util/waveutil";
 import clsx from "clsx";
@@ -335,6 +335,16 @@ export class PreviewModel implements ViewModel {
             if (mimeType == "directory") {
                 const showHiddenFiles = get(this.showHiddenFiles);
                 return [
+                    {
+                        elemtype: "iconbutton",
+                        icon: "terminal",
+                        title: "Open Terminal Here",
+                        click: () =>
+                            openTerminalHere(
+                                globalStore.get(this.connectionImmediate),
+                                jotaiLoadableValue(globalStore.get(this.loadableFileInfo), null)
+                            ),
+                    },
                     {
                         elemtype: "iconbutton",
                         icon: showHiddenFiles ? "eye" : "eye-slash",

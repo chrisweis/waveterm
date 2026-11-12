@@ -9,6 +9,7 @@ This is a personal fork of [wavetermdev/waveterm](https://github.com/wavetermdev
 ## What's customized
 
 - **Folders-first directory preview** — `frontend/app/view/preview/preview-directory.tsx` sorts directories above files in the directory preview pane (the `..` parent row stays pinned at the top).
+- **Open Terminal Here button on folders** — a `>_` icon in the directory preview header, left of the hidden-files eye, opens a terminal block in the folder being shown (same as right-click → Open Terminal Here, which now shares `openTerminalHere` in `frontend/util/previewutil.ts`).
 - **Pinned workspaces — removed, superseded by drag ordering.** Workspaces used to carry a `Pinned` bool that stable-sorted them to the top of the switcher, toggled by a thumbtack on each row. Drag-to-reorder (see the sidebar entry below) strictly dominates it: it does everything pinning did and more, and both handle new workspaces the same way. Keeping both was actively confusing — a saved manual order is a full permutation, so pinned-first could never apply again once you dragged anything, and the thumbtack became decorative. Removed: the thumbtack in both lists, the Pin/Unpin context-menu item, `workspace.SetWorkspacePinned`, `wcore.SetPinned`, and the pinned-first sort in `wcore.ListWorkspaces` (which also drops the `sort` import). `Workspace.Pinned` stays on the Go struct as a vestigial no-op so existing DB rows keep deserializing. The switcher dropdown still resets its scroll to the top on each open, via a callback ref on the `OverlayScrollbarsComponent`.
 - **Tabs stay invisible when switching the tab bar back to `top`** — upstream bug, fixed here. `.tab` starts at `opacity: 0` and is only revealed by `setSizeAndPosition`. Tabs unmount entirely while `app:tabbar` is `left`; on the way back, `handleTabLoaded` finds `tabsLoaded[tabId]` already `true` from the previous mount and returns `prev` unchanged, so nothing in the layout effect's dependency list changes and the freshly mounted tabs are never positioned — they stay invisible until `TabBar` remounts on a workspace switch. Fix is `noTabs` in that dependency array (`frontend/app/tab/tabbar.tsx`). Verified present at the base commit, so it is not caused by any fork change, but it does mean a rebase conflict if upstream touches that array.
 
@@ -152,7 +153,7 @@ Every push to `folders-first` runs the [Fork Build workflow](.github/workflows/f
 1. Go to https://github.com/chrisweis/waveterm/actions
 2. Click the latest "Fork Build" run
 3. Scroll to the **Artifacts** section at the bottom of the run page
-4. Download `wave-windows` (contains `.exe`, `.msi`, `.zip`) or `wave-darwin` (contains `.dmg`, `.zip`)
+4. Download `wave-windows` (contains `.exe`, `.msi`, `.zip`) or `wave-darwin` (one Apple Silicon `.dmg`; to bring back Intel or the update `.zip`, drop `--mac dmg --arm64` from the Darwin build step)
 5. Install
 
 **First-run warnings are expected** because the builds are unsigned:

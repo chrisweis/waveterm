@@ -68,7 +68,10 @@ jobs:
                   task build:tsunamiscaffold
                   npm run build:prod
                   test -f dist/bin/wavesrv.arm64 && test -f dist/bin/wavesrv.x64
-                  npm exec electron-builder -- -c electron-builder.config.cjs -p never
+                  # Apple Silicon DMG only: the config's zip+dmg x arm64+x64 matrix made a ~800 MB artifact
+                  # nobody here installs. A bare --arm64 is not enough; electron-builder keeps the arch list
+                  # from mac.target unless the CLI also names the target (see computeArchToTargetNamesMap).
+                  npm exec electron-builder -- -c electron-builder.config.cjs --mac dmg --arm64 -p never
 
             - name: Build (Windows)
               if: matrix.platform == 'windows'
